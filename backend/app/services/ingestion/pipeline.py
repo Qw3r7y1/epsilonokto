@@ -3,24 +3,30 @@ Invoice processing pipeline.
 
 Flow:
   1. Load invoice record from DB
-  2. Detect file type (PDF vs image)
-  3. Extract text — CPU-bound, runs in a thread executor
-  4. Parse invoice fields and line items
-  5. Persist extracted data back to DB
+  2. Set status → "processing"
+  3. Extract text (PDF native or OCR for scanned/image files) — CPU-bound
+  4. Parse header fields (invoice number, date, due date, total, subtotal, tax)
+  5. Detect vendor and link vendor_id when a confident match is found
+  6. Extract line items, normalize quantities, match/create Products
+  7. Persist everything and set status → "processed"
 """
 
 import asyncio
 import uuid
 from pathlib import Path
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.logging import get_logger
 from app.db.models import Invoice, LineItem
 from app.db.session import async_session
-from app.services.extraction.parser import parse_invoice_text
+from app.services.extraction.invoice_parser import parse_invoice_fields
+from app.services.extraction.line_items import extract_line_items
+from app.services.ingestion.vendor_detect import detect_vendor
 from app.services.ocr.engine import extract_text_from_image
 from app.services.pdf.extractor import extract_pdf
+from app.services.pricing.match import find_or_create_product
 
 log = get_logger(__name__)
 
@@ -28,7 +34,10 @@ _IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg", ".tif", ".tiff"}
 
 
 def _extract_text(path: Path) -> tuple[str, int, bool]:
-    """CPU-bound extraction — called via run_in_executor."""
+    """CPU-bound extraction — called via run_in_executor.
+
+    Returns (text, page_count, is_scanned).
+    """
     if path.suffix.lower() == ".pdf":
         result = extract_pdf(path)
         return result.text, result.page_count, result.is_scanned
@@ -40,6 +49,11 @@ def _extract_text(path: Path) -> tuple[str, int, bool]:
 
 
 async def process_invoice(invoice_id: uuid.UUID, db: AsyncSession) -> Invoice:
+    """Process a single invoice: extract, parse, link, persist.
+
+    Raises ValueError if the invoice record is not found.
+    Any other exception sets status='failed' before re-raising.
+    """
     invoice = await db.get(Invoice, invoice_id)
     if not invoice:
         raise ValueError(f"Invoice {invoice_id} not found")
@@ -48,44 +62,67 @@ async def process_invoice(invoice_id: uuid.UUID, db: AsyncSession) -> Invoice:
     await db.flush()
 
     try:
+        # ── 1. Text extraction (CPU-bound) ──────────────────────────────────
         path = Path(invoice.stored_path)
         loop = asyncio.get_event_loop()
         text, _page_count, _is_scanned = await loop.run_in_executor(
             None, _extract_text, path
         )
-
         invoice.raw_text = text
 
-        parsed = parse_invoice_text(text)
-        invoice.invoice_number = parsed.invoice_number
-        if parsed.invoice_date:
-            invoice.invoice_date = parsed.invoice_date.date()
-        invoice.total = parsed.total_amount
+        # ── 2. Header field parsing ─────────────────────────────────────────
+        fields = parse_invoice_fields(text)
+        invoice.invoice_number = fields.get("invoice_number")
+        invoice.invoice_date = fields.get("invoice_date")
+        invoice.due_date = fields.get("due_date")
+        invoice.total = fields.get("total")
+        invoice.subtotal = fields.get("subtotal")
+        invoice.tax = fields.get("tax")
+        invoice.extraction_confidence = fields.get("confidence", 0)
 
-        for raw in parsed.line_items:
-            pq = raw.parsed_quantity
+        # ── 3. Vendor detection ─────────────────────────────────────────────
+        if not invoice.vendor_id:
+            vendor = await detect_vendor(text, db)
+            if vendor:
+                invoice.vendor_id = vendor.id
+
+        # ── 4. Line item extraction + product matching ──────────────────────
+        raw_items = extract_line_items(text)
+        for raw in raw_items:
+            description = raw.get("description") or "(no description)"
+
             item = LineItem(
                 invoice_id=invoice_id,
-                description=raw.description or "(no description)",
-                raw_quantity_text=raw.raw_quantity,
-                unit_price=raw.raw_unit_price,
-                total_price=raw.raw_total,
-                position=raw.line_number,
+                description=description,
+                raw_quantity_text=raw.get("raw_quantity_text"),
+                cases=raw.get("cases"),
+                units_per_case=raw.get("units_per_case"),
+                raw_quantity=raw.get("raw_quantity"),
+                raw_unit=raw.get("raw_unit"),
+                normalized_quantity=raw.get("normalized_quantity"),
+                normalized_unit=raw.get("normalized_unit"),
+                unit_price=raw.get("unit_price"),
+                total_price=raw.get("total_price"),
+                normalized_unit_price=raw.get("normalized_unit_price"),
+                position=raw.get("position"),
             )
-            if pq:
-                item.cases = pq.cases
-                item.units_per_case = pq.units_per_case
-                item.raw_quantity = pq.total_quantity
-                item.raw_unit = pq.raw_unit
-                item.normalized_quantity = pq.normalized_quantity
-                item.normalized_unit = pq.normalized_unit
-                if pq.normalized_quantity and raw.raw_total:
-                    item.normalized_unit_price = raw.raw_total / pq.normalized_quantity
+
+            product = await find_or_create_product(description, db)
+            if product:
+                item.product_id = product.id
+
             db.add(item)
 
         invoice.status = "processed"
         await db.flush()
-        log.info("Invoice %s processed successfully", invoice_id)
+        log.info(
+            "Invoice %s processed: number=%s vendor_id=%s items=%d confidence=%.1f%%",
+            invoice_id,
+            invoice.invoice_number,
+            invoice.vendor_id,
+            len(raw_items),
+            float(invoice.extraction_confidence or 0),
+        )
 
     except Exception as exc:
         log.exception("Failed to process invoice %s: %s", invoice_id, exc)
@@ -97,11 +134,38 @@ async def process_invoice(invoice_id: uuid.UUID, db: AsyncSession) -> Invoice:
 
 
 async def process_invoice_async(invoice_id: uuid.UUID) -> None:
-    """Background task — opens its own session with commit/rollback."""
+    """Background task entry point — owns its own session with commit/rollback."""
     async with async_session() as session:
         try:
             await process_invoice(invoice_id=invoice_id, db=session)
             await session.commit()
         except Exception:
             await session.rollback()
-            log.exception("Background processing failed for invoice %s", invoice_id)
+            log.exception(
+                "Background processing failed for invoice %s", invoice_id
+            )
+
+
+async def reprocess_invoice(invoice_id: uuid.UUID, db: AsyncSession) -> Invoice:
+    """Re-run extraction on an already-stored invoice file.
+
+    Deletes existing line items before re-extracting so the slate is clean.
+    Vendor detection runs again (existing vendor_id is cleared first so it
+    is not skipped).
+    """
+    invoice = await db.get(Invoice, invoice_id)
+    if not invoice:
+        raise ValueError(f"Invoice {invoice_id} not found")
+
+    # Remove stale line items
+    existing_items = await db.execute(
+        select(LineItem).where(LineItem.invoice_id == invoice_id)
+    )
+    for item in existing_items.scalars().all():
+        await db.delete(item)
+
+    # Clear vendor link so detection reruns fresh
+    invoice.vendor_id = None
+    await db.flush()
+
+    return await process_invoice(invoice_id=invoice_id, db=db)

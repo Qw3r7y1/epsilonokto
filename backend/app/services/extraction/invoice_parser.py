@@ -33,10 +33,10 @@ DUE_DATE_PATTERNS = [
 ]
 
 TOTAL_PATTERNS = [
-    r"total\s*(?:due)?\s*:?\s*\$?\s*([\d,]+\.?\d*)",
-    r"amount\s*due\s*:?\s*\$?\s*([\d,]+\.?\d*)",
-    r"balance\s*due\s*:?\s*\$?\s*([\d,]+\.?\d*)",
-    r"grand\s*total\s*:?\s*\$?\s*([\d,]+\.?\d*)",
+    r"\btotal\s*(?:due)?\s*:?\s*\$?\s*([\d,]+\.?\d*)",
+    r"\bamount\s*due\s*:?\s*\$?\s*([\d,]+\.?\d*)",
+    r"\bbalance\s*due\s*:?\s*\$?\s*([\d,]+\.?\d*)",
+    r"\bgrand\s*total\s*:?\s*\$?\s*([\d,]+\.?\d*)",
 ]
 
 SUBTOTAL_PATTERNS = [

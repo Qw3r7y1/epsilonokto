@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import get_settings
 from app.core.logging import setup_logging, get_logger
-from app.api.routes import health, upload, invoices, vendors, pricing
+from app.api.routes import health, upload, invoices, vendors, pricing, products
 from app.api.routes import dropbox as dropbox_routes
 from app.services.ingestion.dropbox_sync import dropbox_sync_loop
 
@@ -50,4 +50,5 @@ app.include_router(upload.router, prefix=settings.api_prefix)
 app.include_router(invoices.router, prefix=settings.api_prefix)
 app.include_router(vendors.router, prefix=settings.api_prefix)
 app.include_router(pricing.router, prefix=settings.api_prefix)
+app.include_router(products.router, prefix=settings.api_prefix)
 app.include_router(dropbox_routes.router, prefix=settings.api_prefix)
