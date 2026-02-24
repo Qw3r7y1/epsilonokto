@@ -3,11 +3,12 @@ from sqlalchemy.orm import sessionmaker, Session
 from typing import Generator
 
 from app.core.config import get_settings
+from app.db.base import Base  # re-exported so alembic/env.py can import from here
 
 settings = get_settings()
 
 engine = create_engine(
-    settings.DATABASE_URL,
+    settings.database_url_sync,
     pool_pre_ping=True,
     pool_size=10,
     max_overflow=20,

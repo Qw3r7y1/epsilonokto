@@ -33,6 +33,11 @@ class Settings(BaseSettings):
     OPENAI_API_KEY: str = ""
     ANTHROPIC_API_KEY: str = ""
 
+    @property
+    def database_url_sync(self) -> str:
+        """Synchronous URL for Alembic (strips +asyncpg driver prefix)."""
+        return self.DATABASE_URL.replace("postgresql+asyncpg://", "postgresql://")
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"
