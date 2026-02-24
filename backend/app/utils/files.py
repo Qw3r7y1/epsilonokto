@@ -1,18 +1,11 @@
-"""File utility helpers."""
-
-import hashlib
 from pathlib import Path
 
 
-def sha256_of_file(path: Path, chunk_size: int = 65536) -> str:
-    h = hashlib.sha256()
-    with open(path, "rb") as f:
-        while chunk := f.read(chunk_size):
-            h.update(chunk)
-    return h.hexdigest()
+def safe_filename(filename: str) -> str:
+    """Remove path separators and null bytes from filename."""
+    return Path(filename).name.replace("\x00", "")
 
 
-def safe_filename(name: str) -> str:
-    """Strip characters that are unsafe in filenames."""
-    keep = set("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_.")
-    return "".join(c if c in keep else "_" for c in name)
+def get_extension(filename: str) -> str:
+    """Get lowercase file extension without dot."""
+    return Path(filename).suffix.lstrip(".").lower()
