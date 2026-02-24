@@ -1,8 +1,2 @@
-import uuid
-from pydantic import BaseModel
-
-
-class UploadResponse(BaseModel):
-    invoice_id: uuid.UUID
-    filename: str
-    message: str
+# UploadResponse has moved to app.schemas.invoice — re-exported here.
+from app.schemas.invoice import UploadResponse  # noqa: F401

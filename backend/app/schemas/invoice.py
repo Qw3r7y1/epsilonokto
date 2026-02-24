@@ -1,49 +1,73 @@
-import uuid
 from datetime import date, datetime
+from decimal import Decimal
+from uuid import UUID
 from typing import Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 
-class LineItemOut(BaseModel):
-    id: uuid.UUID
+# ── Line Items ───────────────────────────────────────────
+
+class LineItemBase(BaseModel):
     description: str
-    raw_quantity_text: Optional[str]
-    cases: Optional[float]
-    units_per_case: Optional[float]
-    raw_quantity: Optional[float]
-    raw_unit: Optional[str]
-    normalized_quantity: Optional[float]
-    normalized_unit: Optional[str]
-    unit_price: Optional[float]
-    total_price: Optional[float]
-    normalized_unit_price: Optional[float]
-    position: Optional[int]
-    product_id: Optional[uuid.UUID]
-
-    model_config = {"from_attributes": True}
+    raw_quantity_text: Optional[str] = None
+    cases: Optional[Decimal] = None
+    units_per_case: Optional[Decimal] = None
+    raw_quantity: Optional[Decimal] = None
+    raw_unit: Optional[str] = None
+    normalized_quantity: Optional[Decimal] = None
+    normalized_unit: Optional[str] = None
+    unit_price: Optional[Decimal] = None
+    total_price: Optional[Decimal] = None
+    normalized_unit_price: Optional[Decimal] = None
+    position: Optional[int] = None
 
 
-class InvoiceOut(BaseModel):
-    id: uuid.UUID
-    vendor_id: Optional[uuid.UUID]
+class LineItemOut(LineItemBase):
+    model_config = ConfigDict(from_attributes=True)
+    id: UUID
+    product_id: Optional[UUID] = None
+
+
+# ── Invoice ──────────────────────────────────────────────
+
+class InvoiceBase(BaseModel):
+    invoice_number: Optional[str] = None
+    invoice_date: Optional[date] = None
+    due_date: Optional[date] = None
+    subtotal: Optional[Decimal] = None
+    tax: Optional[Decimal] = None
+    total: Optional[Decimal] = None
+    currency: str = "USD"
+
+
+class InvoiceOut(InvoiceBase):
+    model_config = ConfigDict(from_attributes=True)
+    id: UUID
+    vendor_id: Optional[UUID] = None
     original_filename: str
-    file_type: Optional[str]
-    invoice_number: Optional[str]
-    invoice_date: Optional[date]
-    due_date: Optional[date]
-    subtotal: Optional[float]
-    tax: Optional[float]
-    total: Optional[float]
+    file_type: Optional[str] = None
+    status: str
+    extraction_confidence: Optional[Decimal] = None
+    created_at: datetime
+    line_items: list[LineItemOut] = []
+
+
+class InvoiceListOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: UUID
+    vendor_id: Optional[UUID] = None
+    invoice_number: Optional[str] = None
+    invoice_date: Optional[date] = None
+    total: Optional[Decimal] = None
     currency: str
     status: str
-    extraction_confidence: Optional[float]
+    original_filename: str
     created_at: datetime
-    updated_at: datetime
-
-    model_config = {"from_attributes": True}
 
 
-class InvoiceDetailOut(InvoiceOut):
-    raw_text: Optional[str]
-    line_items: list[LineItemOut] = []
+class UploadResponse(BaseModel):
+    invoice_id: UUID
+    filename: str
+    status: str
+    message: str

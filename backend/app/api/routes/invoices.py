@@ -7,12 +7,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import Invoice
 from app.db.session import get_db
-from app.schemas.invoice import InvoiceDetailOut, InvoiceOut
+from app.schemas.invoice import InvoiceListOut, InvoiceOut
 
 router = APIRouter()
 
 
-@router.get("/invoices", response_model=list[InvoiceOut])
+@router.get("/invoices", response_model=list[InvoiceListOut])
 async def list_invoices(
     vendor_id: Optional[uuid.UUID] = Query(None),
     status: Optional[str] = Query(None),
@@ -30,7 +30,7 @@ async def list_invoices(
     return result.scalars().all()
 
 
-@router.get("/invoices/{invoice_id}", response_model=InvoiceDetailOut)
+@router.get("/invoices/{invoice_id}", response_model=InvoiceOut)
 async def get_invoice(invoice_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
     invoice = await db.get(Invoice, invoice_id)
     if not invoice:
