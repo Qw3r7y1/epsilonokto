@@ -23,7 +23,7 @@ def _preprocess(img: Image.Image) -> Image.Image:
 
 def ocr_image(image_path: Path, lang: Optional[str] = None) -> str:
     """Run Tesseract on a single image file and return extracted text."""
-    lang = lang or settings.OCR_LANG
+    lang = lang or settings.OCR_LANGUAGE
     pytesseract.pytesseract.tesseract_cmd = settings.TESSERACT_CMD
 
     img = Image.open(image_path)
@@ -42,7 +42,7 @@ def ocr_image_bytes(data: bytes, lang: Optional[str] = None) -> str:
     img = Image.open(io.BytesIO(data))
     img = _preprocess(img)
 
-    lang = lang or settings.OCR_LANG
+    lang = lang or settings.OCR_LANGUAGE
     pytesseract.pytesseract.tesseract_cmd = settings.TESSERACT_CMD
     config = f"--oem 3 --psm 6 -l {lang}"
     return pytesseract.image_to_string(img, config=config)

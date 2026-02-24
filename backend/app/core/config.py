@@ -5,32 +5,33 @@ from pathlib import Path
 
 class Settings(BaseSettings):
     # App
-    APP_NAME: str = "Maillard Back Office"
-    DEBUG: bool = False
-    API_V1_PREFIX: str = "/api/v1"
+    APP_ENV: str = "development"
+    APP_DEBUG: bool = False
+    APP_SECRET_KEY: str = "change-this-to-a-random-string"
+    API_PREFIX: str = "/api/v1"
 
     # Database
-    DATABASE_URL: str = "postgresql://maillard:maillard@localhost:5432/maillard"
+    DATABASE_URL: str = "postgresql+asyncpg://maillard:changeme@db:5432/maillard_db"
 
     # Storage
-    STORAGE_BACKEND: str = "local"  # "local" or "s3"
-    LOCAL_UPLOAD_DIR: Path = Path("data/raw_uploads")
-    LOCAL_PROCESSED_DIR: Path = Path("data/processed_text")
-    LOCAL_EXPORT_DIR: Path = Path("data/exports")
+    UPLOAD_DIR: Path = Path("./data/raw_uploads")
+    PROCESSED_DIR: Path = Path("./data/processed_text")
+    MAX_UPLOAD_SIZE_MB: int = 20
 
     # S3 (prod)
-    AWS_BUCKET: str = ""
+    AWS_S3_BUCKET: str = ""
     AWS_REGION: str = "us-east-1"
     AWS_ACCESS_KEY_ID: str = ""
     AWS_SECRET_ACCESS_KEY: str = ""
 
     # OCR
-    TESSERACT_CMD: str = "tesseract"
+    TESSERACT_CMD: str = "/usr/bin/tesseract"
+    OCR_LANGUAGE: str = "eng"
     OCR_DPI: int = 300
-    OCR_LANG: str = "eng"
 
-    # File upload limits
-    MAX_UPLOAD_SIZE_MB: int = 50
+    # LLM (optional / future)
+    OPENAI_API_KEY: str = ""
+    ANTHROPIC_API_KEY: str = ""
 
     class Config:
         env_file = ".env"

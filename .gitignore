@@ -1,11 +1,23 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+.venv/
+
+# Environment
 .env
+
+# Data (keep structure, ignore contents)
 data/raw_uploads/*
 data/processed_text/*
 data/exports/*
 !data/**/.gitkeep
-__pycache__/
-*.py[cod]
-.venv/
-venv/
-.pytest_cache/
-postgres_data/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db

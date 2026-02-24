@@ -43,7 +43,7 @@ async def upload_invoice(
         )
 
     # Save raw upload
-    upload_dir: Path = settings.LOCAL_UPLOAD_DIR
+    upload_dir: Path = settings.UPLOAD_DIR
     upload_dir.mkdir(parents=True, exist_ok=True)
     invoice_id = uuid.uuid4()
     suffix = Path(file.filename or "upload").suffix

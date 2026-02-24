@@ -6,10 +6,10 @@ from app.core.logging import setup_logging
 from app.api.routes import health, invoices, vendors, pricing, upload
 
 settings = get_settings()
-setup_logging(debug=settings.DEBUG)
+setup_logging(debug=settings.APP_DEBUG)
 
 app = FastAPI(
-    title=settings.APP_NAME,
+    title="Maillard Back Office",
     description="Internal invoice processing system for Maillard.",
     version="0.1.0",
     docs_url="/docs",
@@ -26,7 +26,7 @@ app.add_middleware(
 
 # Routers
 app.include_router(health.router, tags=["health"])
-app.include_router(upload.router, prefix=settings.API_V1_PREFIX, tags=["upload"])
-app.include_router(invoices.router, prefix=settings.API_V1_PREFIX, tags=["invoices"])
-app.include_router(vendors.router, prefix=settings.API_V1_PREFIX, tags=["vendors"])
-app.include_router(pricing.router, prefix=settings.API_V1_PREFIX, tags=["pricing"])
+app.include_router(upload.router, prefix=settings.API_PREFIX, tags=["upload"])
+app.include_router(invoices.router, prefix=settings.API_PREFIX, tags=["invoices"])
+app.include_router(vendors.router, prefix=settings.API_PREFIX, tags=["vendors"])
+app.include_router(pricing.router, prefix=settings.API_PREFIX, tags=["pricing"])
