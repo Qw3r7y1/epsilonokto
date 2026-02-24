@@ -6,7 +6,7 @@ from app.core.logging import setup_logging
 from app.api.routes import health, invoices, vendors, pricing, upload
 
 settings = get_settings()
-setup_logging(debug=settings.app_debug)
+setup_logging(level="DEBUG" if settings.app_debug else "INFO")
 
 app = FastAPI(
     title="Maillard Back Office",
