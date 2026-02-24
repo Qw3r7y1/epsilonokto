@@ -1,25 +1,32 @@
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker, Session
-from typing import Generator
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.orm import DeclarativeBase
 
 from app.core.config import get_settings
-from app.db.base import Base  # re-exported so alembic/env.py can import from here
 
 settings = get_settings()
 
-engine = create_engine(
-    settings.database_url_sync,
-    pool_pre_ping=True,
-    pool_size=10,
-    max_overflow=20,
+engine = create_async_engine(
+    settings.database_url,
+    echo=settings.app_debug,
+    pool_size=5,
+    max_overflow=10,
 )
 
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+async_session = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
 
-def get_db() -> Generator[Session, None, None]:
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+class Base(DeclarativeBase):
+    pass
+
+
+async def get_db() -> AsyncSession:
+    """FastAPI dependency — yields an async DB session."""
+    async with async_session() as session:
+        try:
+            yield session
+            await session.commit()
+        except Exception:
+            await session.rollback()
+            raise
+        finally:
+            await session.close()

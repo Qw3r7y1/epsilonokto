@@ -1,11 +1,13 @@
+import asyncio
+import hashlib
 import uuid
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
-from app.db.models import Invoice, InvoiceStatus
+from app.db.models import Invoice
 from app.db.session import get_db
 from app.schemas.upload import UploadResponse
 from app.services.ingestion.pipeline import process_invoice_async
@@ -25,7 +27,7 @@ ALLOWED_CONTENT_TYPES = {
 async def upload_invoice(
     file: UploadFile = File(...),
     vendor_id: uuid.UUID | None = None,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
     if file.content_type not in ALLOWED_CONTENT_TYPES:
         raise HTTPException(
@@ -46,28 +48,32 @@ async def upload_invoice(
     upload_dir = Path(settings.upload_dir)
     upload_dir.mkdir(parents=True, exist_ok=True)
     invoice_id = uuid.uuid4()
-    suffix = Path(file.filename or "upload").suffix
+    original_filename = file.filename or "upload"
+    suffix = Path(original_filename).suffix
     dest = upload_dir / f"{invoice_id}{suffix}"
     dest.write_bytes(contents)
+
+    file_hash = hashlib.sha256(contents).hexdigest()
+    file_type = suffix.lstrip(".").lower() or "unknown"
 
     # Create invoice record
     invoice = Invoice(
         id=invoice_id,
         vendor_id=vendor_id,
-        filename=file.filename or dest.name,
-        file_path=str(dest),
-        status=InvoiceStatus.pending,
+        original_filename=original_filename,
+        stored_path=str(dest),
+        file_hash=file_hash,
+        file_type=file_type,
+        status="pending",
     )
     db.add(invoice)
-    db.commit()
-
-    # Kick off background processing (fire-and-forget via asyncio)
-    import asyncio
+    # Commit before launching the background task so it can read the record
+    await db.commit()
 
     asyncio.create_task(process_invoice_async(invoice_id=invoice_id))
 
     return UploadResponse(
         invoice_id=invoice_id,
-        filename=file.filename or dest.name,
+        filename=original_filename,
         message="Invoice uploaded and queued for processing.",
     )

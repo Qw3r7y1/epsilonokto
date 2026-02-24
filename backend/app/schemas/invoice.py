@@ -1,26 +1,24 @@
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 from typing import Optional
 
 from pydantic import BaseModel
 
-from app.db.models import InvoiceStatus
-
 
 class LineItemOut(BaseModel):
     id: uuid.UUID
-    raw_description: Optional[str]
-    raw_quantity: Optional[str]
-    raw_unit: Optional[str]
-    raw_unit_price: Optional[float]
-    raw_total: Optional[float]
+    description: str
+    raw_quantity_text: Optional[str]
     cases: Optional[float]
     units_per_case: Optional[float]
-    unit_size: Optional[float]
-    unit_size_unit: Optional[str]
-    total_base_quantity: Optional[float]
-    price_per_base_unit: Optional[float]
-    line_number: Optional[int]
+    raw_quantity: Optional[float]
+    raw_unit: Optional[str]
+    normalized_quantity: Optional[float]
+    normalized_unit: Optional[str]
+    unit_price: Optional[float]
+    total_price: Optional[float]
+    normalized_unit_price: Optional[float]
+    position: Optional[int]
     product_id: Optional[uuid.UUID]
 
     model_config = {"from_attributes": True}
@@ -29,28 +27,23 @@ class LineItemOut(BaseModel):
 class InvoiceOut(BaseModel):
     id: uuid.UUID
     vendor_id: Optional[uuid.UUID]
-    filename: str
+    original_filename: str
+    file_type: Optional[str]
     invoice_number: Optional[str]
-    invoice_date: Optional[datetime]
-    total_amount: Optional[float]
+    invoice_date: Optional[date]
+    due_date: Optional[date]
+    subtotal: Optional[float]
+    tax: Optional[float]
+    total: Optional[float]
     currency: str
-    status: InvoiceStatus
-    is_scanned: bool
-    page_count: Optional[int]
-    uploaded_at: datetime
-    processed_at: Optional[datetime]
-    error_message: Optional[str]
+    status: str
+    extraction_confidence: Optional[float]
+    created_at: datetime
+    updated_at: datetime
 
     model_config = {"from_attributes": True}
 
 
 class InvoiceDetailOut(InvoiceOut):
-    ocr_text: Optional[str]
+    raw_text: Optional[str]
     line_items: list[LineItemOut] = []
-
-
-class InvoiceListParams(BaseModel):
-    vendor_id: Optional[uuid.UUID] = None
-    status: Optional[InvoiceStatus] = None
-    skip: int = 0
-    limit: int = 50

@@ -1,158 +1,130 @@
 import uuid
-from datetime import datetime
-from typing import Optional
+from datetime import date, datetime
 
 from sqlalchemy import (
-    BigInteger,
-    Boolean,
+    Column,
+    Date,
     DateTime,
-    Enum,
     ForeignKey,
     Integer,
     Numeric,
     String,
     Text,
-    func,
+    UniqueConstraint,
 )
 from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import relationship
+from sqlalchemy.sql import func
 
-from app.db.base import Base
-
-# ---------------------------------------------------------------------------
-# Enums
-# ---------------------------------------------------------------------------
-
-import enum
-
-
-class InvoiceStatus(str, enum.Enum):
-    pending = "pending"
-    processing = "processing"
-    extracted = "extracted"
-    failed = "failed"
-
-
-class CompareMode(str, enum.Enum):
-    weight = "weight"
-    volume = "volume"
-    count = "count"
-    none = "none"
-
-
-# ---------------------------------------------------------------------------
-# Models
-# ---------------------------------------------------------------------------
+from app.db.session import Base
 
 
 class Vendor(Base):
     __tablename__ = "vendors"
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
-    name: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)
-    alias: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
-    contact_email: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
-    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now()
-    )
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    name = Column(String(255), nullable=False, unique=True)
+    normalized_name = Column(String(255), nullable=False, index=True)
+    contact_email = Column(String(255))
+    phone = Column(String(50))
+    address = Column(Text)
+    notes = Column(Text)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
-    invoices: Mapped[list["Invoice"]] = relationship(back_populates="vendor")
-
-
-class Product(Base):
-    __tablename__ = "products"
-
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
-    name: Mapped[str] = mapped_column(String(255), nullable=False)
-    sku: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
-    compare_mode: Mapped[CompareMode] = mapped_column(
-        Enum(CompareMode), default=CompareMode.none
-    )
-    base_unit: Mapped[Optional[str]] = mapped_column(
-        String(20), nullable=True
-    )  # g, ml, ea
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now()
-    )
-
-    line_items: Mapped[list["InvoiceLineItem"]] = relationship(back_populates="product")
+    invoices = relationship("Invoice", back_populates="vendor")
 
 
 class Invoice(Base):
     __tablename__ = "invoices"
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
-    vendor_id: Mapped[Optional[uuid.UUID]] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("vendors.id"), nullable=True
-    )
-    filename: Mapped[str] = mapped_column(String(512), nullable=False)
-    file_path: Mapped[str] = mapped_column(String(1024), nullable=False)
-    invoice_number: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
-    invoice_date: Mapped[Optional[datetime]] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
-    total_amount: Mapped[Optional[float]] = mapped_column(Numeric(12, 2), nullable=True)
-    currency: Mapped[str] = mapped_column(String(3), default="USD")
-    status: Mapped[InvoiceStatus] = mapped_column(
-        Enum(InvoiceStatus), default=InvoiceStatus.pending
-    )
-    ocr_text: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    error_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    is_scanned: Mapped[bool] = mapped_column(Boolean, default=False)
-    page_count: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
-    uploaded_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now()
-    )
-    processed_at: Mapped[Optional[datetime]] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    vendor_id = Column(UUID(as_uuid=True), ForeignKey("vendors.id"), nullable=True)
 
-    vendor: Mapped[Optional["Vendor"]] = relationship(back_populates="invoices")
-    line_items: Mapped[list["InvoiceLineItem"]] = relationship(
-        back_populates="invoice", cascade="all, delete-orphan"
-    )
+    # Source file
+    original_filename = Column(String(500), nullable=False)
+    stored_path = Column(String(1000), nullable=False)
+    file_hash = Column(String(64), nullable=False, index=True)  # SHA-256 for dedup
+    file_type = Column(String(20))  # pdf, png, jpg, etc.
+
+    # Extracted fields
+    invoice_number = Column(String(100), index=True)
+    invoice_date = Column(Date)
+    due_date = Column(Date)
+    subtotal = Column(Numeric(12, 2))
+    tax = Column(Numeric(12, 2))
+    total = Column(Numeric(12, 2))
+    currency = Column(String(3), default="USD")
+
+    # Raw extracted text (for debugging / re-extraction)
+    raw_text = Column(Text)
+
+    # Processing status
+    status = Column(String(20), default="pending")  # pending, processed, failed, review
+    extraction_confidence = Column(Numeric(5, 2))  # 0-100
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    vendor = relationship("Vendor", back_populates="invoices")
+    line_items = relationship("LineItem", back_populates="invoice", cascade="all, delete-orphan")
 
 
-class InvoiceLineItem(Base):
-    __tablename__ = "invoice_line_items"
+class Product(Base):
+    __tablename__ = "products"
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
-    invoice_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("invoices.id"), nullable=False
-    )
-    product_id: Mapped[Optional[uuid.UUID]] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("products.id"), nullable=True
-    )
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    name = Column(String(255), nullable=False)
+    normalized_name = Column(String(255), nullable=False, index=True)
+    category = Column(String(100))
 
-    # Raw extracted values
-    raw_description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    raw_quantity: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
-    raw_unit: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
-    raw_unit_price: Mapped[Optional[float]] = mapped_column(Numeric(12, 4), nullable=True)
-    raw_total: Mapped[Optional[float]] = mapped_column(Numeric(12, 2), nullable=True)
+    # How to compare prices for this product across vendors
+    # "weight" → normalize to grams then compare per-gram price
+    # "volume" → normalize to ml then compare per-ml price
+    # "count"  → compare per-unit price (cases, each, packs)
+    # "none"   → don't normalize, show raw units side by side
+    compare_mode = Column(String(20), default="none")
 
-    # Normalized values
-    cases: Mapped[Optional[float]] = mapped_column(Numeric(10, 4), nullable=True)
-    units_per_case: Mapped[Optional[float]] = mapped_column(Numeric(10, 4), nullable=True)
-    unit_size: Mapped[Optional[float]] = mapped_column(Numeric(10, 4), nullable=True)
-    unit_size_unit: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
-    total_base_quantity: Mapped[Optional[float]] = mapped_column(
-        Numeric(14, 6), nullable=True
-    )  # in base_unit (g / ml / ea)
-    price_per_base_unit: Mapped[Optional[float]] = mapped_column(
-        Numeric(14, 6), nullable=True
-    )
+    # The canonical unit for display after normalization (e.g., "kg", "oz", "L")
+    # If null, system picks a sensible default per compare_mode
+    base_unit = Column(String(20), nullable=True)
 
-    line_number: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
 
-    invoice: Mapped["Invoice"] = relationship(back_populates="line_items")
-    product: Mapped[Optional["Product"]] = relationship(back_populates="line_items")
+    __table_args__ = (UniqueConstraint("normalized_name", name="uq_product_name"),)
+
+
+class LineItem(Base):
+    __tablename__ = "line_items"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    invoice_id = Column(UUID(as_uuid=True), ForeignKey("invoices.id"), nullable=False)
+    product_id = Column(UUID(as_uuid=True), ForeignKey("products.id"), nullable=True)
+
+    description = Column(Text, nullable=False)
+
+    # ── Raw quantity as it appears on the invoice ────────
+    # For "5/20" format: cases=5, units_per_case=20, raw_quantity=100
+    # For simple "10 lb":  cases=null, units_per_case=null, raw_quantity=10
+    raw_quantity_text = Column(String(50))     # original text, e.g. "5/20", "10", "3x24"
+    cases = Column(Numeric(10, 3))             # number of cases/packs (null if simple qty)
+    units_per_case = Column(Numeric(10, 3))    # units inside each case (null if simple qty)
+    raw_quantity = Column(Numeric(12, 3))       # total quantity = cases * units_per_case, or direct
+    raw_unit = Column(String(50))              # unit as written: "oz", "lb", "g", "cs", "ea", "gal"
+
+    # ── Normalized for comparison ────────────────────────
+    # Converted to a base unit (grams for weight, ml for volume, units for count)
+    normalized_quantity = Column(Numeric(14, 4))  # quantity in base unit
+    normalized_unit = Column(String(20))          # "g", "ml", or "ea"
+
+    # ── Pricing ──────────────────────────────────────────
+    unit_price = Column(Numeric(12, 4))          # price per raw_unit
+    total_price = Column(Numeric(12, 2))         # line total
+    normalized_unit_price = Column(Numeric(14, 6))  # price per normalized unit (for comparison)
+
+    position = Column(Integer)  # row order on the invoice
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    invoice = relationship("Invoice", back_populates="line_items")
+    product = relationship("Product")
