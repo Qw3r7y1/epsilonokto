@@ -1,38 +1,54 @@
-import uuid
+from uuid import UUID
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
-from app.db.models import Invoice
 from app.db.session import get_db
-from app.schemas.invoice import InvoiceListOut, InvoiceOut
+from app.db.models import Invoice
+from app.schemas.invoice import InvoiceOut, InvoiceListOut
 
-router = APIRouter()
+router = APIRouter(prefix="/invoices", tags=["Invoices"])
 
 
-@router.get("/invoices", response_model=list[InvoiceListOut])
+@router.get("/", response_model=list[InvoiceListOut])
 async def list_invoices(
-    vendor_id: Optional[uuid.UUID] = Query(None),
-    status: Optional[str] = Query(None),
-    skip: int = Query(0, ge=0),
-    limit: int = Query(50, ge=1, le=200),
+    status: Optional[str] = Query(None, description="Filter by status"),
+    vendor_id: Optional[UUID] = Query(None),
+    limit: int = Query(50, le=200),
+    offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
 ):
-    q = select(Invoice)
-    if vendor_id:
-        q = q.where(Invoice.vendor_id == vendor_id)
+    """List invoices with optional filters."""
+    query = select(Invoice).order_by(Invoice.created_at.desc())
+
     if status:
-        q = q.where(Invoice.status == status)
-    q = q.order_by(Invoice.created_at.desc()).offset(skip).limit(limit)
-    result = await db.execute(q)
+        query = query.where(Invoice.status == status)
+    if vendor_id:
+        query = query.where(Invoice.vendor_id == vendor_id)
+
+    query = query.limit(limit).offset(offset)
+    result = await db.execute(query)
     return result.scalars().all()
 
 
-@router.get("/invoices/{invoice_id}", response_model=InvoiceOut)
-async def get_invoice(invoice_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
-    invoice = await db.get(Invoice, invoice_id)
+@router.get("/{invoice_id}", response_model=InvoiceOut)
+async def get_invoice(
+    invoice_id: UUID,
+    db: AsyncSession = Depends(get_db),
+):
+    """Get a single invoice with its line items."""
+    query = (
+        select(Invoice)
+        .options(selectinload(Invoice.line_items))
+        .where(Invoice.id == invoice_id)
+    )
+    result = await db.execute(query)
+    invoice = result.scalar_one_or_none()
+
     if not invoice:
         raise HTTPException(status_code=404, detail="Invoice not found")
+
     return invoice
