@@ -1,3 +1,4 @@
+import asyncio
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -6,6 +7,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import get_settings
 from app.core.logging import setup_logging, get_logger
 from app.api.routes import health, upload, invoices, vendors, pricing
+from app.api.routes import dropbox as dropbox_routes
+from app.services.ingestion.dropbox_sync import dropbox_sync_loop
 
 settings = get_settings()
 logger = get_logger("main")
@@ -15,7 +18,13 @@ logger = get_logger("main")
 async def lifespan(app: FastAPI):
     setup_logging("DEBUG" if settings.app_debug else "INFO")
     logger.info(f"Starting Maillard Back Office ({settings.app_env})")
+
+    # Start the Dropbox background poller (no-op if token not configured)
+    sync_task = asyncio.create_task(dropbox_sync_loop())
+
     yield
+
+    sync_task.cancel()
     logger.info("Shutting down")
 
 
@@ -41,3 +50,4 @@ app.include_router(upload.router, prefix=settings.api_prefix)
 app.include_router(invoices.router, prefix=settings.api_prefix)
 app.include_router(vendors.router, prefix=settings.api_prefix)
 app.include_router(pricing.router, prefix=settings.api_prefix)
+app.include_router(dropbox_routes.router, prefix=settings.api_prefix)

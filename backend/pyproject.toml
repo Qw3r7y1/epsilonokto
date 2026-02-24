@@ -31,6 +31,9 @@ dependencies = [
     # Utilities
     "python-dotenv>=1.0",
     "httpx>=0.25",
+
+    # Dropbox
+    "dropbox>=12.0",
 ]
 
 [project.optional-dependencies]

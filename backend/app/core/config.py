@@ -40,6 +40,11 @@ class Settings(BaseSettings):
     tesseract_cmd: str = "/usr/bin/tesseract"
     ocr_language: str = "eng"
 
+    # Dropbox
+    dropbox_access_token: str = ""
+    dropbox_folder: str = "/invoices"          # folder to watch inside Dropbox
+    dropbox_poll_interval_seconds: int = 300   # how often to check for new files
+
     model_config = {"env_file": ".env", "extra": "ignore"}
 
 
