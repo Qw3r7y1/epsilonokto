@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import get_settings
 from app.core.logging import setup_logging, get_logger
-from app.api.routes import health, upload, invoices, vendors
+from app.api.routes import health, upload, invoices, vendors, pricing
 
 settings = get_settings()
 logger = get_logger("main")
@@ -40,3 +40,4 @@ app.include_router(health.router)
 app.include_router(upload.router, prefix=settings.api_prefix)
 app.include_router(invoices.router, prefix=settings.api_prefix)
 app.include_router(vendors.router, prefix=settings.api_prefix)
+app.include_router(pricing.router, prefix=settings.api_prefix)
