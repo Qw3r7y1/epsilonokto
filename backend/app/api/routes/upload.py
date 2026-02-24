@@ -1,79 +1,25 @@
-import asyncio
-import hashlib
-import uuid
-from pathlib import Path
-
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, UploadFile, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.config import get_settings
-from app.db.models import Invoice
 from app.db.session import get_db
-from app.schemas.upload import UploadResponse
-from app.services.ingestion.pipeline import process_invoice_async
+from app.schemas.invoice import UploadResponse
+from app.services.ingestion.router import IngestionRouter
+from app.core.logging import get_logger
 
-settings = get_settings()
-router = APIRouter()
+logger = get_logger("api.upload")
+router = APIRouter(prefix="/upload", tags=["Upload"])
 
-ALLOWED_CONTENT_TYPES = {
-    "application/pdf",
-    "image/png",
-    "image/jpeg",
-    "image/tiff",
-}
+ALLOWED_TYPES = {"application/pdf", "image/png", "image/jpeg", "image/tiff"}
 
 
-@router.post("/upload", response_model=UploadResponse, status_code=202)
-async def upload_invoice(
-    file: UploadFile = File(...),
-    vendor_id: uuid.UUID | None = None,
-    db: AsyncSession = Depends(get_db),
-):
-    if file.content_type not in ALLOWED_CONTENT_TYPES:
+@router.post("/", response_model=UploadResponse)
+async def upload_invoice(file: UploadFile = File(...), db: AsyncSession = Depends(get_db)):
+    if file.content_type not in ALLOWED_TYPES:
         raise HTTPException(
-            status_code=415,
-            detail=f"Unsupported file type: {file.content_type}. "
-            f"Allowed: {', '.join(ALLOWED_CONTENT_TYPES)}",
+            status_code=400,
+            detail=f"Unsupported file type: {file.content_type}. Accepted: PDF, PNG, JPEG, TIFF.",
         )
-
-    max_bytes = settings.max_upload_size_mb * 1024 * 1024
-    contents = await file.read()
-    if len(contents) > max_bytes:
-        raise HTTPException(
-            status_code=413,
-            detail=f"File too large. Max size: {settings.max_upload_size_mb} MB",
-        )
-
-    # Save raw upload
-    upload_dir = Path(settings.upload_dir)
-    upload_dir.mkdir(parents=True, exist_ok=True)
-    invoice_id = uuid.uuid4()
-    original_filename = file.filename or "upload"
-    suffix = Path(original_filename).suffix
-    dest = upload_dir / f"{invoice_id}{suffix}"
-    dest.write_bytes(contents)
-
-    file_hash = hashlib.sha256(contents).hexdigest()
-    file_type = suffix.lstrip(".").lower() or "unknown"
-
-    # Create invoice record
-    invoice = Invoice(
-        id=invoice_id,
-        vendor_id=vendor_id,
-        original_filename=original_filename,
-        stored_path=str(dest),
-        file_hash=file_hash,
-        file_type=file_type,
-        status="pending",
-    )
-    db.add(invoice)
-    # Commit before launching the background task so it can read the record
-    await db.commit()
-
-    asyncio.create_task(process_invoice_async(invoice_id=invoice_id))
-
-    return UploadResponse(
-        invoice_id=invoice_id,
-        filename=original_filename,
-        message="Invoice uploaded and queued for processing.",
-    )
+    logger.info(f"Received upload: {file.filename} ({file.content_type})")
+    ingestion = IngestionRouter()
+    result = await ingestion.process(file=file, db=db)
+    return result
