@@ -1,40 +1,48 @@
-import uuid
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.models import Vendor
 from app.db.session import get_db
-from app.schemas.vendor import VendorCreate, VendorOut
+from app.db.models import Vendor
+from app.schemas.vendor import VendorOut, VendorCreate
+from app.services.extraction.normalize import normalize_vendor_name
 
-router = APIRouter()
+router = APIRouter(prefix="/vendors", tags=["Vendors"])
 
 
-@router.get("/vendors", response_model=list[VendorOut])
+@router.get("/", response_model=list[VendorOut])
 async def list_vendors(db: AsyncSession = Depends(get_db)):
+    """List all vendors."""
     result = await db.execute(select(Vendor).order_by(Vendor.name))
     return result.scalars().all()
 
 
-@router.post("/vendors", response_model=VendorOut, status_code=201)
-async def create_vendor(payload: VendorCreate, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(Vendor).where(Vendor.name == payload.name))
-    if result.scalar_one_or_none():
-        raise HTTPException(status_code=409, detail="Vendor with this name already exists")
-    vendor = Vendor(
-        **payload.model_dump(),
-        normalized_name=payload.name.strip().lower(),
+@router.post("/", response_model=VendorOut, status_code=201)
+async def create_vendor(
+    vendor: VendorCreate,
+    db: AsyncSession = Depends(get_db),
+):
+    """Manually create a vendor."""
+    db_vendor = Vendor(
+        name=vendor.name,
+        normalized_name=normalize_vendor_name(vendor.name),
+        contact_email=vendor.contact_email,
+        phone=vendor.phone,
+        address=vendor.address,
+        notes=vendor.notes,
     )
-    db.add(vendor)
+    db.add(db_vendor)
     await db.flush()
-    await db.refresh(vendor)
-    return vendor
+    await db.refresh(db_vendor)
+    return db_vendor
 
 
-@router.get("/vendors/{vendor_id}", response_model=VendorOut)
-async def get_vendor(vendor_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
-    vendor = await db.get(Vendor, vendor_id)
+@router.get("/{vendor_id}", response_model=VendorOut)
+async def get_vendor(vendor_id: UUID, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(Vendor).where(Vendor.id == vendor_id))
+    vendor = result.scalar_one_or_none()
     if not vendor:
         raise HTTPException(status_code=404, detail="Vendor not found")
     return vendor

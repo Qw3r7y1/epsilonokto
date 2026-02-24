@@ -28,5 +28,5 @@ app.add_middleware(
 app.include_router(health.router, tags=["health"])
 app.include_router(upload.router, prefix=settings.api_prefix)
 app.include_router(invoices.router, prefix=settings.api_prefix)
-app.include_router(vendors.router, prefix=settings.api_prefix, tags=["vendors"])
+app.include_router(vendors.router, prefix=settings.api_prefix)
 app.include_router(pricing.router, prefix=settings.api_prefix, tags=["pricing"])
