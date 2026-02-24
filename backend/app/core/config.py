@@ -1,46 +1,46 @@
 from pydantic_settings import BaseSettings
 from functools import lru_cache
-from pathlib import Path
 
 
 class Settings(BaseSettings):
     # App
-    APP_ENV: str = "development"
-    APP_DEBUG: bool = False
-    APP_SECRET_KEY: str = "change-this-to-a-random-string"
-    API_PREFIX: str = "/api/v1"
+    app_env: str = "development"
+    app_debug: bool = True
+    app_secret_key: str = "change-me"
+    api_prefix: str = "/api/v1"
 
     # Database
-    DATABASE_URL: str = "postgresql+asyncpg://maillard:changeme@db:5432/maillard_db"
+    postgres_user: str = "maillard"
+    postgres_password: str = "changeme"
+    postgres_host: str = "db"
+    postgres_port: int = 5432
+    postgres_db: str = "maillard_db"
 
-    # Storage
-    UPLOAD_DIR: Path = Path("./data/raw_uploads")
-    PROCESSED_DIR: Path = Path("./data/processed_text")
-    MAX_UPLOAD_SIZE_MB: int = 20
-
-    # S3 (prod)
-    AWS_S3_BUCKET: str = ""
-    AWS_REGION: str = "us-east-1"
-    AWS_ACCESS_KEY_ID: str = ""
-    AWS_SECRET_ACCESS_KEY: str = ""
-
-    # OCR
-    TESSERACT_CMD: str = "/usr/bin/tesseract"
-    OCR_LANGUAGE: str = "eng"
-    OCR_DPI: int = 300
-
-    # LLM (optional / future)
-    OPENAI_API_KEY: str = ""
-    ANTHROPIC_API_KEY: str = ""
+    @property
+    def database_url(self) -> str:
+        return (
+            f"postgresql+asyncpg://{self.postgres_user}:{self.postgres_password}"
+            f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
+        )
 
     @property
     def database_url_sync(self) -> str:
-        """Synchronous URL for Alembic (strips +asyncpg driver prefix)."""
-        return self.DATABASE_URL.replace("postgresql+asyncpg://", "postgresql://")
+        """Sync URL for Alembic migrations."""
+        return (
+            f"postgresql://{self.postgres_user}:{self.postgres_password}"
+            f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
+        )
 
-    class Config:
-        env_file = ".env"
-        env_file_encoding = "utf-8"
+    # File storage
+    upload_dir: str = "./data/raw_uploads"
+    processed_dir: str = "./data/processed_text"
+    max_upload_size_mb: int = 20
+
+    # OCR
+    tesseract_cmd: str = "/usr/bin/tesseract"
+    ocr_language: str = "eng"
+
+    model_config = {"env_file": ".env", "extra": "ignore"}
 
 
 @lru_cache

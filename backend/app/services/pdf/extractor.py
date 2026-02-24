@@ -10,15 +10,13 @@ from typing import NamedTuple
 
 import fitz  # PyMuPDF
 
-from app.core.config import get_settings
 from app.core.logging import get_logger
 from app.services.ocr.engine import ocr_image_bytes
 
-settings = get_settings()
 log = get_logger(__name__)
 
-# Minimum chars per page to consider it a text PDF
-_TEXT_THRESHOLD = 50
+_TEXT_THRESHOLD = 50  # Minimum chars per page to consider it a text PDF
+_OCR_DPI = 300
 
 
 class ExtractionResult(NamedTuple):
@@ -42,7 +40,7 @@ def extract_pdf(path: Path) -> ExtractionResult:
         else:
             # Render page as image and OCR
             scanned_pages += 1
-            pix = page.get_pixmap(dpi=settings.OCR_DPI)
+            pix = page.get_pixmap(dpi=_OCR_DPI)
             img_bytes = pix.tobytes("png")
             ocr_text = ocr_image_bytes(img_bytes)
             pages_text.append(ocr_text)

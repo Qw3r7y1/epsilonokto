@@ -34,16 +34,16 @@ async def upload_invoice(
             f"Allowed: {', '.join(ALLOWED_CONTENT_TYPES)}",
         )
 
-    max_bytes = settings.MAX_UPLOAD_SIZE_MB * 1024 * 1024
+    max_bytes = settings.max_upload_size_mb * 1024 * 1024
     contents = await file.read()
     if len(contents) > max_bytes:
         raise HTTPException(
             status_code=413,
-            detail=f"File too large. Max size: {settings.MAX_UPLOAD_SIZE_MB} MB",
+            detail=f"File too large. Max size: {settings.max_upload_size_mb} MB",
         )
 
     # Save raw upload
-    upload_dir: Path = settings.UPLOAD_DIR
+    upload_dir = Path(settings.upload_dir)
     upload_dir.mkdir(parents=True, exist_ok=True)
     invoice_id = uuid.uuid4()
     suffix = Path(file.filename or "upload").suffix
