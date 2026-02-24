@@ -1,36 +1,33 @@
-#!/usr/bin/env python3
-"""Seed initial vendor data."""
+"""Seed the vendors table with common supplier names.
 
-import sys
-from pathlib import Path
-
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "backend"))
-
+Usage: python scripts/seed_vendors.py
+"""
+import asyncio
+from app.db.session import async_session
 from app.db.models import Vendor
-from app.db.session import SessionLocal
+from app.services.extraction.normalize import normalize_vendor_name
 
 VENDORS = [
-    {"name": "Sysco", "alias": "sysco", "contact_email": "orders@sysco.com"},
-    {"name": "US Foods", "alias": "usfoods"},
-    {"name": "Performance Food Group", "alias": "pfg"},
-    {"name": "Gordon Food Service", "alias": "gfs"},
+    {"name": "Sysco", "notes": "National food distributor"},
+    {"name": "US Foods", "notes": "National food distributor"},
+    {"name": "Gordon Food Service", "notes": "National food distributor"},
+    {"name": "Performance Food Group", "notes": "National food distributor"},
+    {"name": "Restaurant Depot", "notes": "Cash & carry wholesale"},
 ]
 
 
-def seed() -> None:
-    db = SessionLocal()
-    try:
-        added = 0
+async def seed():
+    async with async_session() as session:
         for v in VENDORS:
-            exists = db.query(Vendor).filter(Vendor.name == v["name"]).first()
-            if not exists:
-                db.add(Vendor(**v))
-                added += 1
-        db.commit()
-        print(f"Seeded {added} vendors ({len(VENDORS) - added} already existed).")
-    finally:
-        db.close()
+            vendor = Vendor(
+                name=v["name"],
+                normalized_name=normalize_vendor_name(v["name"]),
+                notes=v.get("notes"),
+            )
+            session.add(vendor)
+        await session.commit()
+        print(f"Seeded {len(VENDORS)} vendors")
 
 
 if __name__ == "__main__":
-    seed()
+    asyncio.run(seed())
