@@ -1,0 +1,11 @@
+.env
+data/raw_uploads/*
+data/processed_text/*
+data/exports/*
+!data/**/.gitkeep
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+postgres_data/
