@@ -58,8 +58,8 @@ Subtotal: $345.00"""
         assert items[0]["normalized_unit"] == "ml"
 
     def test_position_numbering(self):
-        text = """Item A    5 lb    $1.00    $5.00
-Item B    10 oz    $2.00    $20.00"""
+        text = """Cheese    5 lb    $1.00    $5.00
+Cream     10 oz   $2.00    $20.00"""
         items = extract_line_items(text)
         assert items[0]["position"] == 1
         assert items[1]["position"] == 2
