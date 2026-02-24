@@ -19,7 +19,7 @@ from app.core.logging import get_logger
 from app.db.models import Invoice, LineItem
 from app.db.session import async_session
 from app.services.extraction.parser import parse_invoice_text
-from app.services.ocr.engine import ocr_image
+from app.services.ocr.engine import extract_text_from_image
 from app.services.pdf.extractor import extract_pdf
 
 log = get_logger(__name__)
@@ -33,7 +33,7 @@ def _extract_text(path: Path) -> tuple[str, int, bool]:
         result = extract_pdf(path)
         return result.text, result.page_count, result.is_scanned
     elif path.suffix.lower() in _IMAGE_SUFFIXES:
-        text = ocr_image(path)
+        text = extract_text_from_image(path.read_bytes())
         return text, 1, True
     else:
         raise ValueError(f"Unsupported file type: {path.suffix}")

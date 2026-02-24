@@ -1,48 +1,29 @@
-"""Tesseract OCR wrapper with basic image preprocessing."""
+import io
 
-from pathlib import Path
-from typing import Optional
-
+from PIL import Image
 import pytesseract
-from PIL import Image, ImageFilter, ImageOps
 
 from app.core.config import get_settings
 from app.core.logging import get_logger
 
+logger = get_logger("ocr.tesseract")
 settings = get_settings()
-log = get_logger(__name__)
+
+pytesseract.pytesseract.tesseract_cmd = settings.tesseract_cmd
 
 
-def _preprocess(img: Image.Image) -> Image.Image:
-    """Greyscale → sharpen → auto-contrast for better OCR accuracy."""
-    img = ImageOps.grayscale(img)
-    img = img.filter(ImageFilter.SHARPEN)
-    img = ImageOps.autocontrast(img)
-    return img
+def extract_text_from_image(image_bytes: bytes) -> str:
+    """Run Tesseract OCR on an image (PNG/JPEG/TIFF bytes)."""
+    try:
+        image = Image.open(io.BytesIO(image_bytes))
 
+        # Convert to RGB if needed (e.g., RGBA PNGs)
+        if image.mode not in ("L", "RGB"):
+            image = image.convert("RGB")
 
-def ocr_image(image_path: Path, lang: Optional[str] = None) -> str:
-    """Run Tesseract on a single image file and return extracted text."""
-    lang = lang or settings.ocr_language
-    pytesseract.pytesseract.tesseract_cmd = settings.tesseract_cmd
-
-    img = Image.open(image_path)
-    img = _preprocess(img)
-
-    config = f"--oem 3 --psm 6 -l {lang}"
-    text = pytesseract.image_to_string(img, config=config)
-    log.debug("OCR extracted %d chars from %s", len(text), image_path.name)
-    return text
-
-
-def ocr_image_bytes(data: bytes, lang: Optional[str] = None) -> str:
-    """Run Tesseract on raw image bytes."""
-    import io
-
-    img = Image.open(io.BytesIO(data))
-    img = _preprocess(img)
-
-    lang = lang or settings.ocr_language
-    pytesseract.pytesseract.tesseract_cmd = settings.tesseract_cmd
-    config = f"--oem 3 --psm 6 -l {lang}"
-    return pytesseract.image_to_string(img, config=config)
+        text = pytesseract.image_to_string(image, lang=settings.ocr_language)
+        logger.info(f"OCR extracted {len(text)} chars")
+        return text.strip()
+    except Exception as e:
+        logger.error(f"OCR failed: {e}")
+        return ""
