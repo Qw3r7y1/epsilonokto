@@ -11,7 +11,7 @@ from typing import NamedTuple
 import fitz  # PyMuPDF
 
 from app.core.logging import get_logger
-from app.services.ocr.engine import ocr_image_bytes
+from app.services.ocr.engine import extract_text_from_image
 
 log = get_logger(__name__)
 
@@ -42,7 +42,7 @@ def extract_pdf(path: Path) -> ExtractionResult:
             scanned_pages += 1
             pix = page.get_pixmap(dpi=_OCR_DPI)
             img_bytes = pix.tobytes("png")
-            ocr_text = ocr_image_bytes(img_bytes)
+            ocr_text = extract_text_from_image(img_bytes)
             pages_text.append(ocr_text)
             log.debug("Page %d is scanned, used OCR", page.number + 1)
 
