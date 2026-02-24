@@ -75,16 +75,12 @@ async def process_invoice(invoice_id: uuid.UUID, db: AsyncSession) -> Invoice:
             if pq:
                 item.cases = pq.cases
                 item.units_per_case = pq.units_per_case
-                item.raw_quantity = (
-                    (pq.cases or 0) * (pq.units_per_case or 0)
-                    if pq.cases is not None
-                    else pq.unit_size
-                )
-                item.raw_unit = pq.unit_size_unit
-                item.normalized_quantity = pq.total_base_quantity
-                item.normalized_unit = pq.base_unit
-                if pq.total_base_quantity and raw.raw_total:
-                    item.normalized_unit_price = raw.raw_total / pq.total_base_quantity
+                item.raw_quantity = pq.total_quantity
+                item.raw_unit = pq.raw_unit
+                item.normalized_quantity = pq.normalized_quantity
+                item.normalized_unit = pq.normalized_unit
+                if pq.normalized_quantity and raw.raw_total:
+                    item.normalized_unit_price = raw.raw_total / pq.normalized_quantity
             db.add(item)
 
         invoice.status = "processed"
