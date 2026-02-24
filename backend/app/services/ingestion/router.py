@@ -5,7 +5,8 @@ import hashlib
 import uuid
 from pathlib import Path
 
-from fastapi import UploadFile
+from fastapi import HTTPException, UploadFile
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
@@ -23,10 +24,25 @@ class IngestionRouter:
         max_bytes = settings.max_upload_size_mb * 1024 * 1024
         contents = await file.read()
         if len(contents) > max_bytes:
-            from fastapi import HTTPException
             raise HTTPException(
                 status_code=413,
                 detail=f"File too large. Max size: {settings.max_upload_size_mb} MB",
+            )
+
+        file_hash = hashlib.sha256(contents).hexdigest()
+
+        # ── Deduplication check ─────────────────────────────────────────────
+        existing = await db.execute(
+            select(Invoice).where(Invoice.file_hash == file_hash)
+        )
+        duplicate = existing.scalar_one_or_none()
+        if duplicate:
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    f"Duplicate file detected. This document was already uploaded "
+                    f"(invoice_id={duplicate.id}, status={duplicate.status})."
+                ),
             )
 
         upload_dir = Path(settings.upload_dir)
@@ -38,7 +54,6 @@ class IngestionRouter:
         dest = upload_dir / f"{invoice_id}{suffix}"
         dest.write_bytes(contents)
 
-        file_hash = hashlib.sha256(contents).hexdigest()
         file_type = suffix.lstrip(".").lower() or "unknown"
 
         invoice = Invoice(
