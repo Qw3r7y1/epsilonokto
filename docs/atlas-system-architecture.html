@@ -1,0 +1,810 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ATLAS — System Architecture</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Space+Grotesk:wght@300;400;500;600;700&display=swap');
+
+:root {
+  --bg: #0a0a0f;
+  --bg-card: #12121a;
+  --bg-card-hover: #1a1a26;
+  --border: #1e1e2e;
+  --border-glow: #2a2a3e;
+  --text: #e0e0e8;
+  --text-dim: #6e6e82;
+  --text-bright: #ffffff;
+  --accent-blue: #4a8eff;
+  --accent-cyan: #00d4aa;
+  --accent-purple: #8b5cf6;
+  --accent-orange: #f59e0b;
+  --accent-red: #ef4444;
+  --accent-pink: #ec4899;
+  --accent-green: #22c55e;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Space Grotesk', sans-serif;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+.grain {
+  position: fixed;
+  top: 0; left: 0; width: 100%; height: 100%;
+  pointer-events: none;
+  opacity: 0.03;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+  z-index: 1000;
+}
+
+.header {
+  text-align: center;
+  padding: 48px 24px 32px;
+  position: relative;
+}
+
+.header::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 200px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--accent-blue), transparent);
+}
+
+.logo {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 42px;
+  font-weight: 700;
+  letter-spacing: 12px;
+  background: linear-gradient(135deg, var(--accent-blue), var(--accent-cyan));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  margin-bottom: 8px;
+}
+
+.subtitle {
+  font-size: 13px;
+  color: var(--text-dim);
+  letter-spacing: 4px;
+  text-transform: uppercase;
+  font-weight: 300;
+}
+
+.architecture {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 40px 24px 80px;
+}
+
+/* Section Labels */
+.section-label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  margin-bottom: 16px;
+  padding-left: 4px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.section-label::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+
+/* Connection Lines */
+.flow-connector {
+  display: flex;
+  justify-content: center;
+  padding: 8px 0;
+}
+
+.flow-arrow {
+  width: 2px;
+  height: 32px;
+  background: linear-gradient(to bottom, var(--accent-blue), transparent);
+  position: relative;
+}
+
+.flow-arrow::after {
+  content: '▼';
+  position: absolute;
+  bottom: -10px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 8px;
+  color: var(--accent-blue);
+}
+
+.flow-arrow-up {
+  width: 2px;
+  height: 32px;
+  background: linear-gradient(to top, var(--accent-cyan), transparent);
+  position: relative;
+}
+
+.flow-arrow-up::after {
+  content: '▲';
+  position: absolute;
+  top: -10px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 8px;
+  color: var(--accent-cyan);
+}
+
+.bidirectional {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+}
+
+/* Cards */
+.card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 20px;
+  transition: all 0.3s ease;
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+}
+
+.card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--card-accent, var(--accent-blue)), transparent);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.card:hover {
+  background: var(--bg-card-hover);
+  border-color: var(--border-glow);
+  transform: translateY(-2px);
+}
+
+.card:hover::before {
+  opacity: 1;
+}
+
+.card.expanded {
+  border-color: var(--card-accent, var(--accent-blue));
+}
+
+.card.expanded::before {
+  opacity: 1;
+}
+
+.card-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.card-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+.card-title {
+  font-weight: 600;
+  font-size: 15px;
+  color: var(--text-bright);
+}
+
+.card-subtitle {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  color: var(--text-dim);
+  margin-top: 2px;
+}
+
+.card-desc {
+  font-size: 13px;
+  color: var(--text-dim);
+  line-height: 1.6;
+  margin-top: 4px;
+}
+
+.card-details {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.4s ease, margin-top 0.3s ease;
+  margin-top: 0;
+}
+
+.card.expanded .card-details {
+  max-height: 600px;
+  margin-top: 16px;
+}
+
+.detail-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+}
+
+.detail-item:last-child { border-bottom: none; }
+
+.detail-key {
+  font-family: 'JetBrains Mono', monospace;
+  color: var(--text-dim);
+  font-size: 11px;
+}
+
+.detail-val {
+  color: var(--text);
+  text-align: right;
+  font-size: 12px;
+}
+
+.tech-tag {
+  display: inline-block;
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  background: rgba(74, 142, 255, 0.1);
+  color: var(--accent-blue);
+  border: 1px solid rgba(74, 142, 255, 0.2);
+  margin: 2px;
+}
+
+/* Grid Layouts */
+.grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.grid-3 {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 12px;
+}
+
+.grid-4 {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr 1fr;
+  gap: 12px;
+}
+
+/* Orchestrator special styling */
+.orchestrator-card {
+  --card-accent: var(--accent-cyan);
+  background: linear-gradient(135deg, rgba(0, 212, 170, 0.05), rgba(74, 142, 255, 0.05));
+  border-color: rgba(0, 212, 170, 0.2);
+}
+
+.orchestrator-card:hover {
+  border-color: rgba(0, 212, 170, 0.4);
+}
+
+/* Color accents for card types */
+.vision-accent { --card-accent: var(--accent-purple); }
+.audio-accent { --card-accent: var(--accent-orange); }
+.memory-accent { --card-accent: var(--accent-pink); }
+.behavior-accent { --card-accent: var(--accent-green); }
+.security-accent { --card-accent: var(--accent-red); }
+.infra-accent { --card-accent: var(--accent-blue); }
+
+.vision-accent .card-icon { background: rgba(139, 92, 246, 0.15); color: var(--accent-purple); }
+.audio-accent .card-icon { background: rgba(245, 158, 11, 0.15); color: var(--accent-orange); }
+.memory-accent .card-icon { background: rgba(236, 72, 153, 0.15); color: var(--accent-pink); }
+.behavior-accent .card-icon { background: rgba(34, 197, 94, 0.15); color: var(--accent-green); }
+.security-accent .card-icon { background: rgba(239, 68, 68, 0.15); color: var(--accent-red); }
+.infra-accent .card-icon { background: rgba(74, 142, 255, 0.15); color: var(--accent-blue); }
+
+/* Phase timeline */
+.phase-track {
+  display: flex;
+  gap: 2px;
+  margin-top: 40px;
+}
+
+.phase-block {
+  flex: 1;
+  padding: 16px 14px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  position: relative;
+}
+
+.phase-block:hover {
+  background: var(--bg-card-hover);
+  transform: translateY(-2px);
+}
+
+.phase-num {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  color: var(--text-dim);
+  letter-spacing: 2px;
+}
+
+.phase-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-bright);
+  margin: 6px 0 4px;
+}
+
+.phase-weeks {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  color: var(--text-dim);
+}
+
+.phase-bar {
+  height: 3px;
+  border-radius: 2px;
+  margin-top: 10px;
+}
+
+.p1-bar { background: linear-gradient(90deg, var(--accent-blue), var(--accent-cyan)); width: 100%; }
+.p2-bar { background: linear-gradient(90deg, var(--accent-purple), var(--accent-pink)); width: 85%; }
+.p3-bar { background: linear-gradient(90deg, var(--accent-orange), var(--accent-red)); width: 70%; }
+.p4-bar { background: linear-gradient(90deg, var(--accent-green), var(--accent-cyan)); width: 55%; }
+.p5-bar { background: linear-gradient(90deg, var(--text-dim), var(--accent-blue)); width: 40%; }
+
+/* Cost summary */
+.cost-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.cost-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 20px;
+  text-align: center;
+}
+
+.cost-label {
+  font-size: 11px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  margin-bottom: 8px;
+}
+
+.cost-value {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 28px;
+  font-weight: 700;
+  background: linear-gradient(135deg, var(--accent-cyan), var(--accent-blue));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.cost-note {
+  font-size: 11px;
+  color: var(--text-dim);
+  margin-top: 6px;
+}
+
+/* Data flow animation */
+.data-flow-example {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 24px;
+  margin-top: 16px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  line-height: 2;
+}
+
+.flow-step {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 8px 0;
+  opacity: 0.5;
+  transition: opacity 0.3s ease;
+}
+
+.flow-step.active {
+  opacity: 1;
+}
+
+.step-num {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 600;
+  flex-shrink: 0;
+  color: var(--bg);
+}
+
+.step-text {
+  color: var(--text);
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.step-tag {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-weight: 600;
+}
+
+.tag-vision { background: rgba(139, 92, 246, 0.2); color: var(--accent-purple); }
+.tag-event { background: rgba(74, 142, 255, 0.2); color: var(--accent-blue); }
+.tag-behavior { background: rgba(34, 197, 94, 0.2); color: var(--accent-green); }
+.tag-orchestrator { background: rgba(0, 212, 170, 0.2); color: var(--accent-cyan); }
+.tag-llm { background: rgba(236, 72, 153, 0.2); color: var(--accent-pink); }
+.tag-output { background: rgba(245, 158, 11, 0.2); color: var(--accent-orange); }
+
+.expand-hint {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  color: var(--text-dim);
+  text-align: center;
+  margin-top: 8px;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.card:hover .expand-hint {
+  opacity: 1;
+}
+
+@media (max-width: 768px) {
+  .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr; }
+  .phase-track { flex-direction: column; }
+  .cost-grid { grid-template-columns: 1fr; }
+  .logo { font-size: 28px; letter-spacing: 8px; }
+}
+</style>
+</head>
+<body>
+<div class="grain"></div>
+
+<div class="header">
+  <div class="logo">ATLAS</div>
+  <div class="subtitle">Adaptive Thoughtful Living Agent System</div>
+</div>
+
+<div class="architecture">
+
+  <!-- ORCHESTRATOR -->
+  <div class="section-label">Central Intelligence</div>
+  <div class="card orchestrator-card" onclick="toggleCard(this)">
+    <div class="card-header">
+      <div class="card-icon" style="background: rgba(0, 212, 170, 0.15); color: var(--accent-cyan);">&#x1f9e0;</div>
+      <div>
+        <div class="card-title">Orchestrator &mdash; The Brain</div>
+        <div class="card-subtitle">Event Router &bull; Context Assembler &bull; Decision Engine</div>
+      </div>
+    </div>
+    <div class="card-desc">Receives all events from subsystems, assembles full context (who, where, when, mood, memory), prioritizes actions, and routes responses to the correct room and modality.</div>
+    <div class="card-details">
+      <div class="detail-item"><span class="detail-key">Framework</span><span class="detail-val"><span class="tech-tag">FastAPI</span><span class="tech-tag">asyncio</span></span></div>
+      <div class="detail-item"><span class="detail-key">Event Bus</span><span class="detail-val"><span class="tech-tag">Redis Streams</span></span></div>
+      <div class="detail-item"><span class="detail-key">LLM</span><span class="detail-val"><span class="tech-tag">Claude Sonnet 4.5</span></span></div>
+      <div class="detail-item"><span class="detail-key">Priority Levels</span><span class="detail-val">8 (security.critical &rarr; info.ambient)</span></div>
+      <div class="detail-item"><span class="detail-key">Context Window</span><span class="detail-val">Person + Room + Mood + 5 recent memories</span></div>
+      <div class="detail-item"><span class="detail-key">Response Latency</span><span class="detail-val">Target &lt; 2s for voice responses</span></div>
+    </div>
+    <div class="expand-hint">click to expand</div>
+  </div>
+
+  <div class="flow-connector"><div class="bidirectional"><div class="flow-arrow"></div></div></div>
+
+  <!-- EVENT PRODUCERS -->
+  <div class="section-label">Event Producers</div>
+  <div class="grid-3">
+
+    <!-- VISION -->
+    <div class="card vision-accent" onclick="toggleCard(this)">
+      <div class="card-header">
+        <div class="card-icon">&#x1f441;</div>
+        <div>
+          <div class="card-title">Vision Pipeline</div>
+          <div class="card-subtitle">7 cameras &bull; 10 FPS processing</div>
+        </div>
+      </div>
+      <div class="card-desc">Real-time face recognition, object detection, activity understanding, and mood analysis from camera feeds.</div>
+      <div class="card-details">
+        <div class="detail-item"><span class="detail-key">Face Detection</span><span class="detail-val"><span class="tech-tag">RetinaFace</span></span></div>
+        <div class="detail-item"><span class="detail-key">Face Recognition</span><span class="detail-val"><span class="tech-tag">ArcFace</span></span></div>
+        <div class="detail-item"><span class="detail-key">Object Detection</span><span class="detail-val"><span class="tech-tag">YOLOv8-L</span></span></div>
+        <div class="detail-item"><span class="detail-key">Activity</span><span class="detail-val"><span class="tech-tag">Florence-2</span></span></div>
+        <div class="detail-item"><span class="detail-key">Expression</span><span class="detail-val"><span class="tech-tag">HSEmotion</span></span></div>
+        <div class="detail-item"><span class="detail-key">Tracking</span><span class="detail-val"><span class="tech-tag">ByteTrack</span></span></div>
+        <div class="detail-item"><span class="detail-key">VRAM Usage</span><span class="detail-val">~7 GB total</span></div>
+        <div class="detail-item"><span class="detail-key">Input</span><span class="detail-val">RTSP &rarr; FFmpeg &rarr; shared memory</span></div>
+      </div>
+      <div class="expand-hint">click to expand</div>
+    </div>
+
+    <!-- AUDIO -->
+    <div class="card audio-accent" onclick="toggleCard(this)">
+      <div class="card-header">
+        <div class="card-icon">&#x1f399;</div>
+        <div>
+          <div class="card-title">Audio Pipeline</div>
+          <div class="card-subtitle">4 rooms &bull; bidirectional</div>
+        </div>
+      </div>
+      <div class="card-desc">Wake word detection, speech-to-text, text-to-speech, and room-aware audio routing.</div>
+      <div class="card-details">
+        <div class="detail-item"><span class="detail-key">Wake Word</span><span class="detail-val"><span class="tech-tag">OpenWakeWord</span></span></div>
+        <div class="detail-item"><span class="detail-key">STT</span><span class="detail-val"><span class="tech-tag">faster-whisper</span></span></div>
+        <div class="detail-item"><span class="detail-key">TTS (local)</span><span class="detail-val"><span class="tech-tag">Piper</span> ~200ms</span></div>
+        <div class="detail-item"><span class="detail-key">TTS (cloud)</span><span class="detail-val"><span class="tech-tag">ElevenLabs</span> ~800ms</span></div>
+        <div class="detail-item"><span class="detail-key">VAD</span><span class="detail-val"><span class="tech-tag">Silero VAD</span></span></div>
+        <div class="detail-item"><span class="detail-key">Speaker ID</span><span class="detail-val">Cross-ref with vision location</span></div>
+        <div class="detail-item"><span class="detail-key">Hardware</span><span class="detail-val">RPi4 + ReSpeaker per room</span></div>
+      </div>
+      <div class="expand-hint">click to expand</div>
+    </div>
+
+    <!-- BEHAVIORAL -->
+    <div class="card behavior-accent" onclick="toggleCard(this)">
+      <div class="card-header">
+        <div class="card-icon">&#x1f3af;</div>
+        <div>
+          <div class="card-title">Behavioral Coach</div>
+          <div class="card-subtitle">Rule engine &bull; escalation logic</div>
+        </div>
+      </div>
+      <div class="card-desc">Monitors habits via vision events, triggers contextual interventions with mood-aware escalation.</div>
+      <div class="card-details">
+        <div class="detail-item"><span class="detail-key">Engine</span><span class="detail-val">Rule matching + LLM reasoning</span></div>
+        <div class="detail-item"><span class="detail-key">Escalation</span><span class="detail-val">4 levels (humor &rarr; direct &rarr; log only)</span></div>
+        <div class="detail-item"><span class="detail-key">Mood Adapt</span><span class="detail-val">Backs off if person is upset</span></div>
+        <div class="detail-item"><span class="detail-key">Cooldown</span><span class="detail-val">Per-rule configurable (30-120 min)</span></div>
+        <div class="detail-item"><span class="detail-key">Built-in Rules</span><span class="detail-val">Late eating, screen time, posture, sedentary, hydration</span></div>
+        <div class="detail-item"><span class="detail-key">Custom Rules</span><span class="detail-val">YAML config + web dashboard</span></div>
+      </div>
+      <div class="expand-hint">click to expand</div>
+    </div>
+
+  </div>
+
+  <div class="flow-connector"><div class="bidirectional"><div class="flow-arrow"></div></div></div>
+
+  <!-- DATA LAYER -->
+  <div class="section-label">Data &amp; Memory Layer</div>
+  <div class="grid-4">
+    <div class="card memory-accent" onclick="toggleCard(this)">
+      <div class="card-header">
+        <div class="card-icon">&#x1f5c3;</div>
+        <div>
+          <div class="card-title">PostgreSQL</div>
+          <div class="card-subtitle">Structured data</div>
+        </div>
+      </div>
+      <div class="card-details">
+        <div class="detail-item"><span class="detail-key">Tables</span><span class="detail-val">people, rules, interactions, events</span></div>
+        <div class="detail-item"><span class="detail-key">Extension</span><span class="detail-val"><span class="tech-tag">pgvector</span> for face embeddings</span></div>
+      </div>
+      <div class="expand-hint">click</div>
+    </div>
+
+    <div class="card memory-accent" onclick="toggleCard(this)">
+      <div class="card-header">
+        <div class="card-icon">&#x1f9ec;</div>
+        <div>
+          <div class="card-title">ChromaDB</div>
+          <div class="card-subtitle">Episodic memory</div>
+        </div>
+      </div>
+      <div class="card-details">
+        <div class="detail-item"><span class="detail-key">Purpose</span><span class="detail-val">Conversational memory + semantic recall</span></div>
+        <div class="detail-item"><span class="detail-key">Retrieval</span><span class="detail-val">Top-5 relevant memories per interaction</span></div>
+      </div>
+      <div class="expand-hint">click</div>
+    </div>
+
+    <div class="card infra-accent" onclick="toggleCard(this)">
+      <div class="card-header">
+        <div class="card-icon">&#x26a1;</div>
+        <div>
+          <div class="card-title">Redis</div>
+          <div class="card-subtitle">Event bus + cache</div>
+        </div>
+      </div>
+      <div class="card-details">
+        <div class="detail-item"><span class="detail-key">Events</span><span class="detail-val">Redis Streams for inter-service messaging</span></div>
+        <div class="detail-item"><span class="detail-key">Queue</span><span class="detail-val">Celery task queue backend</span></div>
+      </div>
+      <div class="expand-hint">click</div>
+    </div>
+
+    <div class="card infra-accent" onclick="toggleCard(this)">
+      <div class="card-header">
+        <div class="card-icon">&#x1f3e0;</div>
+        <div>
+          <div class="card-title">Home Assistant</div>
+          <div class="card-subtitle">Device control</div>
+        </div>
+      </div>
+      <div class="card-details">
+        <div class="detail-item"><span class="detail-key">Controls</span><span class="detail-val">Speakers, lights, locks, alarms</span></div>
+        <div class="detail-item"><span class="detail-key">Integration</span><span class="detail-val">REST API + WebSocket</span></div>
+      </div>
+      <div class="expand-hint">click</div>
+    </div>
+  </div>
+
+  <div class="flow-connector"><div class="bidirectional"><div class="flow-arrow"></div></div></div>
+
+  <!-- SECURITY -->
+  <div class="section-label">Security &amp; Alerts</div>
+  <div class="card security-accent" onclick="toggleCard(this)">
+    <div class="card-header">
+      <div class="card-icon">&#x1f6e1;</div>
+      <div>
+        <div class="card-title">Intrusion Detection Pipeline</div>
+        <div class="card-subtitle">4-level escalation &bull; perimeter &rarr; interior zones</div>
+      </div>
+    </div>
+    <div class="card-desc">Unknown faces trigger escalating alerts: INFO (perimeter log) &rarr; NOTICE (entry point notification + snapshot) &rarr; WARNING (lingering &gt; 60s: audible alert + lights) &rarr; CRITICAL (inside house: full alarm + emergency)</div>
+    <div class="card-details">
+      <div class="detail-item"><span class="detail-key">Face Match Threshold</span><span class="detail-val">cosine sim &gt; 0.55 = known</span></div>
+      <div class="detail-item"><span class="detail-key">Uncertain Zone</span><span class="detail-val">0.40 - 0.55 &rarr; log + ask</span></div>
+      <div class="detail-item"><span class="detail-key">Unknown</span><span class="detail-val">&lt; 0.40 &rarr; alert pipeline</span></div>
+      <div class="detail-item"><span class="detail-key">Response Time</span><span class="detail-val">&lt; 3 seconds detection to notification</span></div>
+    </div>
+    <div class="expand-hint">click to expand</div>
+  </div>
+
+  <!-- DATA FLOW EXAMPLE -->
+  <div class="section-label" style="margin-top: 40px;">Live Data Flow Example</div>
+  <div class="data-flow-example" id="dataFlow">
+    <p style="color: var(--text-dim); font-family: 'Space Grotesk', sans-serif; font-size: 12px; margin-bottom: 16px;">Scenario: George eats pizza in the kitchen at 11:30 PM</p>
+
+    <div class="flow-step active" data-step="1">
+      <div class="step-num" style="background: var(--accent-purple);">1</div>
+      <div class="step-text"><span class="step-tag tag-vision">VISION</span> Camera detects person + pizza &rarr; ArcFace identifies George (0.96) &rarr; HSEmotion reads &ldquo;tired&rdquo; &rarr; Florence-2: &ldquo;person eating pizza at counter&rdquo;</div>
+    </div>
+    <div class="flow-step" data-step="2">
+      <div class="step-num" style="background: var(--accent-blue);">2</div>
+      <div class="step-text"><span class="step-tag tag-event">EVENT</span> VisionEvent published to Redis: <code style="color: var(--accent-cyan);">{person: "George", activity: "eating", room: "kitchen", mood: "tired", time: "23:30"}</code></div>
+    </div>
+    <div class="flow-step" data-step="3">
+      <div class="step-num" style="background: var(--accent-green);">3</div>
+      <div class="step-text"><span class="step-tag tag-behavior">BEHAVIOR</span> Matches &ldquo;Late Night Eating&rdquo; rule &rarr; cooldown OK &rarr; escalation level 1 (light humor) &rarr; emits BehaviorEvent</div>
+    </div>
+    <div class="flow-step" data-step="4">
+      <div class="step-num" style="background: var(--accent-cyan);">4</div>
+      <div class="step-text"><span class="step-tag tag-orchestrator">ORCHESTRATOR</span> Assembles context: tired mood + first reminder today + last conversation 4hrs ago about roasting + goal: &ldquo;stop eating after 10 PM&rdquo;</div>
+    </div>
+    <div class="flow-step" data-step="5">
+      <div class="step-num" style="background: var(--accent-pink);">5</div>
+      <div class="step-text"><span class="step-tag tag-llm">CLAUDE API</span> Generates: &ldquo;Late night pizza mission, huh? You told me you wanted to cut this out. How about I put the kettle on instead?&rdquo;</div>
+    </div>
+    <div class="flow-step" data-step="6">
+      <div class="step-num" style="background: var(--accent-orange);">6</div>
+      <div class="step-text"><span class="step-tag tag-output">OUTPUT</span> Piper TTS (200ms) &rarr; Home Assistant routes to kitchen speaker &rarr; interaction logged to memory</div>
+    </div>
+  </div>
+
+  <!-- BUILD PHASES -->
+  <div class="section-label" style="margin-top: 40px;">Build Phases</div>
+  <div class="phase-track">
+    <div class="phase-block">
+      <div class="phase-num">PHASE 01</div>
+      <div class="phase-name">Foundation</div>
+      <div class="phase-weeks">Weeks 1-4</div>
+      <div class="phase-bar p1-bar"></div>
+    </div>
+    <div class="phase-block">
+      <div class="phase-num">PHASE 02</div>
+      <div class="phase-name">Intelligence</div>
+      <div class="phase-weeks">Weeks 5-8</div>
+      <div class="phase-bar p2-bar"></div>
+    </div>
+    <div class="phase-block">
+      <div class="phase-num">PHASE 03</div>
+      <div class="phase-name">Voice</div>
+      <div class="phase-weeks">Weeks 9-12</div>
+      <div class="phase-bar p3-bar"></div>
+    </div>
+    <div class="phase-block">
+      <div class="phase-num">PHASE 04</div>
+      <div class="phase-name">Behavior</div>
+      <div class="phase-weeks">Weeks 13-16</div>
+      <div class="phase-bar p4-bar"></div>
+    </div>
+    <div class="phase-block">
+      <div class="phase-num">PHASE 05</div>
+      <div class="phase-name">Polish</div>
+      <div class="phase-weeks">Ongoing</div>
+      <div class="phase-bar p5-bar"></div>
+    </div>
+  </div>
+
+  <!-- COST -->
+  <div class="section-label" style="margin-top: 40px;">Cost Estimate</div>
+  <div class="cost-grid">
+    <div class="cost-card">
+      <div class="cost-label">Hardware (One-Time)</div>
+      <div class="cost-value">~$3,200</div>
+      <div class="cost-note">Server + 7 cameras + audio + networking</div>
+    </div>
+    <div class="cost-card">
+      <div class="cost-label">Recurring (Monthly)</div>
+      <div class="cost-value">~$80</div>
+      <div class="cost-note">Claude API + TTS + electricity</div>
+    </div>
+  </div>
+</div>
+
+<script>
+  function toggleCard(el) {
+    el.classList.toggle('expanded');
+  }
+
+  // Animate data flow steps
+  let currentStep = 0;
+  const steps = document.querySelectorAll('.flow-step');
+
+  function animateFlow() {
+    steps.forEach((s, i) => {
+      s.classList.toggle('active', i <= currentStep);
+    });
+    currentStep = (currentStep + 1) % steps.length;
+    if (currentStep === 0) {
+      setTimeout(() => {
+        steps.forEach(s => s.classList.remove('active'));
+        setTimeout(animateFlow, 600);
+      }, 2000);
+    } else {
+      setTimeout(animateFlow, 1200);
+    }
+  }
+
+  setTimeout(animateFlow, 2000);
+</script>
+
+</body>
+</html>
