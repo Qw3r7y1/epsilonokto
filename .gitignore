@@ -14,6 +14,9 @@ data/processed_text/*
 data/exports/*
 !data/**/.gitkeep
 
+# Node
+node_modules/
+
 # IDE
 .vscode/
 .idea/
