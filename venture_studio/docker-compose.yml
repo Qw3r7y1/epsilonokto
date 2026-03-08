@@ -1,0 +1,95 @@
+version: "3.9"
+
+services:
+  # ── PostgreSQL ──────────────────────────────────────────────────────────
+  vs-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: venture
+      POSTGRES_PASSWORD: venture
+      POSTGRES_DB: venture
+    ports:
+      - "5433:5432"
+    volumes:
+      - vs_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U venture"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # ── Redis ───────────────────────────────────────────────────────────────
+  vs-redis:
+    image: redis:7-alpine
+    ports:
+      - "6380:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # ── FastAPI (Venture Studio API) ────────────────────────────────────────
+  vs-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: uvicorn venture_studio.api.app:app --host 0.0.0.0 --port 8001 --reload
+    ports:
+      - "8001:8001"
+    env_file: .env
+    environment:
+      VS_DATABASE_URL: "postgresql+asyncpg://venture:venture@vs-db:5432/venture"
+      VS_REDIS_URL: "redis://vs-redis:6379/0"
+      VS_CELERY_BROKER_URL: "redis://vs-redis:6379/1"
+      VS_CELERY_RESULT_BACKEND: "redis://vs-redis:6379/2"
+    volumes:
+      - .:/app
+    depends_on:
+      vs-db:
+        condition: service_healthy
+      vs-redis:
+        condition: service_healthy
+
+  # ── Celery Worker ───────────────────────────────────────────────────────
+  vs-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: celery -A venture_studio.tasks.celery_app worker --loglevel=info --concurrency=4
+    env_file: .env
+    environment:
+      VS_DATABASE_URL: "postgresql+asyncpg://venture:venture@vs-db:5432/venture"
+      VS_REDIS_URL: "redis://vs-redis:6379/0"
+      VS_CELERY_BROKER_URL: "redis://vs-redis:6379/1"
+      VS_CELERY_RESULT_BACKEND: "redis://vs-redis:6379/2"
+    volumes:
+      - .:/app
+    depends_on:
+      vs-db:
+        condition: service_healthy
+      vs-redis:
+        condition: service_healthy
+
+  # ── Celery Beat (Scheduler) ────────────────────────────────────────────
+  vs-beat:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: celery -A venture_studio.tasks.celery_app beat --loglevel=info
+    env_file: .env
+    environment:
+      VS_DATABASE_URL: "postgresql+asyncpg://venture:venture@vs-db:5432/venture"
+      VS_REDIS_URL: "redis://vs-redis:6379/0"
+      VS_CELERY_BROKER_URL: "redis://vs-redis:6379/1"
+      VS_CELERY_RESULT_BACKEND: "redis://vs-redis:6379/2"
+    volumes:
+      - .:/app
+    depends_on:
+      vs-db:
+        condition: service_healthy
+      vs-redis:
+        condition: service_healthy
+
+volumes:
+  vs_pgdata:
