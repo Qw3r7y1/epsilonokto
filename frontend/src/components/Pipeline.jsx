@@ -348,75 +348,29 @@ export default function Pipeline() {
   const [activeTab, setActiveTab] = useState("pipeline");
 
   return (
-    <div
-      style={{
-        fontFamily: "'DM Sans', 'Segoe UI', sans-serif",
-        background: "#0B1D0F",
-        color: "#E8F5E9",
-        minHeight: "100vh",
-        padding: "0",
-      }}
-    >
-      <link
-        href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Space+Mono:wght@400;700&display=swap"
-        rel="stylesheet"
-      />
-
-      {/* Header */}
-      <div
-        style={{
-          background:
-            "linear-gradient(135deg, #1B4332 0%, #2D6A4F 50%, #40916C 100%)",
-          padding: "48px 32px 32px",
-          borderBottom: "2px solid #52B788",
-        }}
-      >
-        <div style={{ maxWidth: 960, margin: "0 auto" }}>
-          <div
-            style={{
-              fontFamily: "'Space Mono', monospace",
-              fontSize: 11,
-              letterSpacing: 4,
-              color: "#95D5B2",
-              marginBottom: 8,
-              textTransform: "uppercase",
-            }}
-          >
-            Technical Architecture & Cost Analysis
-          </div>
-          <h1
-            style={{
-              fontSize: 32,
-              fontWeight: 700,
-              margin: "0 0 8px 0",
-              lineHeight: 1.2,
-            }}
-          >
-            AI Kids' Content Dubbing Pipeline
-          </h1>
-          <p
-            style={{
-              fontSize: 15,
-              color: "#B7E4C7",
-              margin: 0,
-              maxWidth: 600,
-              lineHeight: 1.6,
-            }}
-          >
-            Multilingual video translation platform &mdash; from source video to
-            lip-synced, culturally-adapted content in any language.
-          </p>
-        </div>
+    <div>
+      {/* Sub-header */}
+      <div style={{ marginBottom: 20 }}>
+        <p
+          style={{
+            fontSize: 14,
+            color: "#95D5B2",
+            margin: 0,
+            lineHeight: 1.6,
+          }}
+        >
+          AI Kids' Content Dubbing Pipeline &mdash; multilingual video
+          translation from source video to lip-synced, culturally-adapted
+          content.
+        </p>
       </div>
 
       {/* Tab Nav */}
       <div
         style={{
-          maxWidth: 960,
-          margin: "0 auto",
-          padding: "24px 32px 0",
           display: "flex",
           gap: 4,
+          marginBottom: 0,
         }}
       >
         {[
@@ -446,13 +400,7 @@ export default function Pipeline() {
         ))}
       </div>
 
-      <div
-        style={{
-          maxWidth: 960,
-          margin: "0 auto",
-          padding: "0 32px 48px",
-        }}
-      >
+      <div>
         {/* Pipeline Tab */}
         {activeTab === "pipeline" && (
           <div
@@ -1026,16 +974,6 @@ export default function Pipeline() {
         )}
       </div>
 
-      <style>{`
-        @keyframes fadeIn {
-          from { opacity: 0; transform: translateY(8px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
-        * { box-sizing: border-box; }
-        ::-webkit-scrollbar { height: 6px; }
-        ::-webkit-scrollbar-track { background: #0B1D0F; }
-        ::-webkit-scrollbar-thumb { background: #2D6A4F; border-radius: 3px; }
-      `}</style>
     </div>
   );
 }
