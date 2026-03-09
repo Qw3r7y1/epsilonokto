@@ -1,14 +1,16 @@
 import { useState } from "react";
 import Pipeline from "./components/Pipeline";
 import BudgetDashboard from "./components/BudgetDashboard";
+import InitialInvestment from "./components/InitialInvestment";
 
 const VIEWS = [
+  { id: "investment", label: "Initial Investment" },
   { id: "budget", label: "Budget Dashboard" },
   { id: "pipeline", label: "Pipeline" },
 ];
 
 export default function App() {
-  const [view, setView] = useState("budget");
+  const [view, setView] = useState("investment");
 
   return (
     <div
@@ -82,6 +84,9 @@ export default function App() {
 
       {/* Content */}
       <div style={{ maxWidth: 1060, margin: "0 auto", padding: "24px 32px 48px" }}>
+        {view === "investment" && (
+          <InitialInvestment onComplete={() => setView("budget")} />
+        )}
         {view === "budget" && <BudgetDashboard />}
         {view === "pipeline" && <Pipeline />}
       </div>
