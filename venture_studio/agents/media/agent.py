@@ -3,6 +3,10 @@ Media Engine Agent
 
 Layer 4 — Distribution.
 Creates short-form content for social media distribution.
+
+Skills mastered: hook formula frameworks, platform-specific optimization,
+hashtag strategy, engagement patterns, content repurposing, viral loop design,
+posting schedule optimization.
 """
 
 from __future__ import annotations
@@ -14,7 +18,7 @@ from venture_studio.agents.base import AgentResult, BaseAgent
 
 class MediaEngine(BaseAgent):
     name = "media_engine"
-    description = "Creates social media content and distribution plans"
+    description = "Creates platform-optimized social content with hooks, engagement strategy, and 14-day calendars"
 
     async def execute(self, context: dict[str, Any]) -> AgentResult:
         niche = context.get("niche", "")
@@ -44,16 +48,36 @@ class MediaEngine(BaseAgent):
         client = anthropic.AsyncAnthropic(api_key=self.settings.anthropic_api_key)
         message = await client.messages.create(
             model=self.settings.claude_model,
-            max_tokens=2048,
+            max_tokens=4096,
             messages=[{
                 "role": "user",
                 "content": (
-                    f"Create a 7-day social media content calendar for a {niche} site.\n"
+                    f"You are a SENIOR social media strategist who has grown accounts to 100K+. "
+                    f"Create content that drives engagement and traffic — lazy content gets you replaced.\n\n"
+                    f"Create a 14-DAY social media content calendar for a {niche} site.\n"
                     f"Offer: {json.dumps(offer)}\n"
                     f"Assets: {json.dumps(assets[:5])}\n\n"
-                    f"For each day, provide: platform, text, hashtags, content_type, cta.\n"
-                    f"Focus on value-first content with subtle CTAs.\n"
-                    f"Return as JSON array."
+                    f"MANDATORY REQUIREMENTS:\n\n"
+                    f"1. **14 days** of content (not 7)\n"
+                    f"2. **4+ platforms**: Twitter/X, Instagram, LinkedIn, TikTok — "
+                    f"EACH post must be formatted natively for its platform:\n"
+                    f"   - Twitter: under 280 chars, thread hooks, engagement questions\n"
+                    f"   - Instagram: caption style with line breaks, 20-30 hashtags\n"
+                    f"   - LinkedIn: professional tone, personal story hooks, no hashtag spam\n"
+                    f"   - TikTok: script format with hook (first 3 sec), body, CTA\n\n"
+                    f"3. **Hook formulas** — every post must use one of:\n"
+                    f"   - Curiosity hook: 'Most people don't know this about [niche]...'\n"
+                    f"   - Controversy hook: 'Unpopular opinion: [contrarian take]'\n"
+                    f"   - Value-first hook: 'Here are 5 [niche] tips that actually work'\n"
+                    f"   - Story hook: 'I spent $X testing [niche] products. Here's what I found'\n\n"
+                    f"4. **Content pillars**: Mix of educational (40%), entertaining (25%), "
+                    f"promotional (20%), community (15%)\n\n"
+                    f"5. **Per-post details**: day, platform, text, hashtags (array), "
+                    f"content_type (educational/entertaining/promotional/community), "
+                    f"cta, hook_type, best_post_time (e.g. '9:00 AM EST'), "
+                    f"repurpose_ideas (how to adapt for other platforms)\n\n"
+                    f"6. **NO repetitive CTAs** — vary the call to action across posts\n\n"
+                    f"Return as JSON array. Each entry = one post."
                 ),
             }],
         )

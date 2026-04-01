@@ -3,11 +3,15 @@ Capital Allocator Agent
 
 Layer 6 — Finance & Analytics.
 Analyzes ROI across experiments and reallocates budget to winners.
-Implements a multi-armed bandit approach with Thompson Sampling.
+Implements multi-armed bandit with risk-adjusted scoring.
+
+Skills mastered: Thompson sampling, ROI calculation, risk-adjusted returns,
+portfolio rebalancing, exploration vs exploitation, time-based kill thresholds.
 """
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from typing import Any
 
 from sqlalchemy import func as sqlfunc, select
@@ -23,7 +27,7 @@ from venture_studio.db.models import (
 
 class CapitalAllocator(BaseAgent):
     name = "capital_allocator"
-    description = "Allocates capital to winning experiments using Thompson Sampling"
+    description = "Allocates capital with risk-adjusted scoring and time-based kill thresholds"
 
     async def execute(self, context: dict[str, Any]) -> AgentResult:
         total_budget = context.get("total_budget", self.settings.max_daily_spend_usd)
@@ -34,7 +38,7 @@ class CapitalAllocator(BaseAgent):
         if not experiments:
             return AgentResult(success=True, data={"message": "No active experiments", "allocations": []})
 
-        # Step 2: Score experiments by ROI
+        # Step 2: Score experiments with risk-adjusted ROI
         scored = self._score_experiments(experiments)
 
         # Step 3: Allocate using Thompson-inspired weighting
@@ -55,11 +59,11 @@ class CapitalAllocator(BaseAgent):
                 entry_type=LedgerEntryType.allocation,
                 amount_usd=alloc["allocated_budget"],
                 category="capital_allocation",
-                description=f"Budget allocation: ROI score {alloc['roi_score']:.2f}",
+                description=f"Budget allocation: ROI score {alloc['roi_score']:.2f}, risk-adjusted",
                 agent_name=self.name,
             ))
 
-        # Step 5: Kill underperformers
+        # Step 5: Kill underperformers with graduated time-based thresholds
         killed = await self._kill_underperformers(scored)
 
         return AgentResult(
@@ -83,8 +87,10 @@ class CapitalAllocator(BaseAgent):
         )
         experiments = result.scalars().all()
 
+        now = datetime.now(timezone.utc)
         financials = []
         for exp in experiments:
+            days_active = (now - exp.created_at.replace(tzinfo=timezone.utc)).days if exp.created_at else 0
             financials.append({
                 "experiment_id": exp.id,
                 "title": exp.title,
@@ -92,24 +98,34 @@ class CapitalAllocator(BaseAgent):
                 "budget_spent": exp.budget_spent,
                 "revenue_total": exp.revenue_total,
                 "roi": (exp.revenue_total / exp.budget_spent - 1) if exp.budget_spent > 0 else 0.0,
+                "days_active": max(days_active, 1),
             })
         return financials
 
     def _score_experiments(self, experiments: list[dict]) -> list[dict]:
         for exp in experiments:
             roi = exp["roi"]
-            # Bayesian-inspired score: reward ROI, penalize high spend with no return
-            if exp["budget_spent"] < 1.0:
-                exp["roi_score"] = 0.5  # Exploration bonus for new experiments
+            spend = exp["budget_spent"]
+            days = exp["days_active"]
+
+            if spend < 1.0:
+                # Exploration bonus for new experiments — give them a chance
+                exp["roi_score"] = 0.5
             elif roi > 0:
-                exp["roi_score"] = min(roi, 10.0) / 10.0  # Cap at 10x ROI
+                # Risk-adjusted scoring: penalize high variance (high spend, low revenue consistency)
+                volatility_proxy = spend / max(exp["revenue_total"], 0.01)
+                risk_adjusted_roi = roi / (1 + volatility_proxy * 0.1)
+                exp["roi_score"] = min(risk_adjusted_roi, 10.0) / 10.0
             else:
-                exp["roi_score"] = max(roi, -1.0) / 10.0  # Negative but bounded
+                # Negative ROI — score relative to how negative, but consider age
+                # Newer experiments get more patience
+                age_factor = min(days / 14.0, 1.0)  # Full penalty after 14 days
+                exp["roi_score"] = max(roi * age_factor, -1.0) / 10.0
+
         return sorted(experiments, key=lambda e: e["roi_score"], reverse=True)
 
     def _allocate(self, scored: list[dict], total_budget: float) -> list[dict]:
         """Proportional allocation weighted by ROI score."""
-        # Shift scores to positive
         min_score = min(e["roi_score"] for e in scored)
         shifted = [e["roi_score"] - min_score + 0.1 for e in scored]
         total_weight = sum(shifted)
@@ -128,10 +144,28 @@ class CapitalAllocator(BaseAgent):
         return allocations
 
     async def _kill_underperformers(self, scored: list[dict]) -> list[str]:
-        """Kill experiments with ROI < -0.5 and spend > $5."""
+        """Kill experiments using graduated time-based thresholds.
+
+        - ROI < -0.8 after 3+ days and spend > $10: kill immediately
+        - ROI < -0.5 after 7+ days and spend > $10: kill
+        - ROI < -0.3 after 14+ days and spend > $10: kill
+        """
         killed = []
         for exp in scored:
-            if exp["roi"] < -0.5 and exp["budget_spent"] > 5.0:
+            roi = exp["roi"]
+            days = exp["days_active"]
+            spend = exp["budget_spent"]
+
+            if spend <= 10.0:
+                continue  # Minimum viable test budget not reached
+
+            should_kill = (
+                (roi < -0.8 and days >= 3)
+                or (roi < -0.5 and days >= 7)
+                or (roi < -0.3 and days >= 14)
+            )
+
+            if should_kill:
                 result = await self.db.execute(
                     select(Experiment).where(Experiment.id == exp["experiment_id"])
                 )

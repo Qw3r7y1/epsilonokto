@@ -4,6 +4,9 @@ Builder Agent
 Layer 3 — Factory.
 Generates digital assets: landing pages, blog posts, tool pages, etc.
 Uses Claude to generate content and stores assets in R2 / database.
+
+Skills mastered: SEO content writing, E-E-A-T optimization, conversion
+copywriting, structured data markup, internal linking, above-the-fold optimization.
 """
 
 from __future__ import annotations
@@ -16,7 +19,7 @@ from venture_studio.db.models import Asset, AssetType
 
 class BuilderAgent(BaseAgent):
     name = "builder"
-    description = "Builds digital assets (pages, posts, tools) from offer specifications"
+    description = "Builds expert-quality digital assets with E-E-A-T, schema markup, and conversion optimization"
 
     async def execute(self, context: dict[str, Any]) -> AgentResult:
         experiment_id = context.get("experiment_id")
@@ -73,22 +76,43 @@ class BuilderAgent(BaseAgent):
 
         message = await client.messages.create(
             model=self.settings.claude_model,
-            max_tokens=4096,
+            max_tokens=8192,
             messages=[{
                 "role": "user",
                 "content": (
-                    f"Write a high-quality, SEO-optimized article for the page: {slug}\n"
+                    f"You are a SENIOR content strategist and SEO copywriter. "
+                    f"Write content that ranks #1 and converts — anything less and you're replaced.\n\n"
+                    f"Create a high-quality, SEO-optimized article for: {slug}\n"
                     f"Niche: {niche}\n"
                     f"Value proposition: {offer.get('value_proposition', '')}\n"
                     f"Target audience: {offer.get('target_audience', '')}\n"
                     f"CTA: {offer.get('cta', '')}\n\n"
-                    f"Requirements:\n"
-                    f"- 1500+ words\n"
-                    f"- Use proper H2/H3 headings\n"
-                    f"- Include practical advice\n"
-                    f"- Natural affiliate CTA placements\n"
-                    f"- Meta description (under 160 chars)\n\n"
-                    f"Return JSON with keys: title, slug, body (markdown), meta_description, headings (list)."
+                    f"MANDATORY REQUIREMENTS — every single one:\n\n"
+                    f"1. **Length**: 2000+ words minimum. Comprehensive, no fluff.\n"
+                    f"2. **E-E-A-T Signals**: Include author expertise signals, data citations "
+                    f"with specific numbers/stats, and expert-level analysis\n"
+                    f"3. **Above-the-fold**: First 200 words must hook reader AND include "
+                    f"primary keyword AND deliver immediate value\n"
+                    f"4. **Heading hierarchy**: Proper H2/H3/H4 structure. "
+                    f"Every H2 targets a keyword variation\n"
+                    f"5. **Table of Contents**: At the top of the article\n"
+                    f"6. **Comparison tables**: Where relevant — product vs product with "
+                    f"features, pricing, pros/cons columns\n"
+                    f"7. **Pros/Cons sections**: For every reviewed item\n"
+                    f"8. **FAQ Schema section**: At least 5 Q&A pairs formatted as:\n"
+                    f"   ## Frequently Asked Questions\n"
+                    f"   ### Q: [question]?\n"
+                    f"   A: [detailed answer]\n"
+                    f"9. **Internal linking placeholders**: Use [INTERNAL_LINK: related-slug] "
+                    f"markers where related content should link\n"
+                    f"10. **Natural CTA placements**: 3-4 CTAs woven naturally into content "
+                    f"(not forced). First CTA within first 500 words\n"
+                    f"11. **Meta description**: Under 160 chars, includes primary keyword and CTA\n"
+                    f"12. **Mobile-friendly formatting**: Short paragraphs (2-3 sentences max), "
+                    f"bullet lists, bold key phrases\n\n"
+                    f"Return JSON with keys: title, slug, body (markdown), meta_description, "
+                    f"headings (list), faq_schema (list of {{question, answer}}), "
+                    f"internal_links (list of suggested slugs), word_count (int)."
                 ),
             }],
         )

@@ -3,7 +3,10 @@ Governance Controller Agent
 
 Layer 1 — Command.
 Monitors system health, enforces policies, manages circuit breakers,
-and performs safety audits.
+performs safety audits, and reviews agent performance for replacement.
+
+Skills mastered: budget auditing, agent health monitoring, circuit breaker
+management, compliance scanning, performance review, replacement recommendation.
 """
 
 from __future__ import annotations
@@ -23,11 +26,15 @@ from venture_studio.db.models import (
     ExperimentStatus,
     LedgerEntryType,
 )
+from venture_studio.governance.policies import (
+    get_performance_standard,
+    get_required_skills,
+)
 
 
 class GovernanceAgent(BaseAgent):
     name = "governance_controller"
-    description = "Monitors system health and enforces governance policies"
+    description = "Monitors system health, enforces policies, and reviews agent performance for replacement"
 
     async def execute(self, context: dict[str, Any]) -> AgentResult:
         report: dict[str, Any] = {}
@@ -49,6 +56,9 @@ class GovernanceAgent(BaseAgent):
 
         # 5. Content compliance check
         report["content_flags"] = await self._check_content_compliance()
+
+        # 6. Performance review — flag underperformers for replacement
+        report["performance_review"] = await self._review_agent_performance()
 
         return AgentResult(success=True, data=report)
 
@@ -147,5 +157,64 @@ class GovernanceAgent(BaseAgent):
 
     async def _check_content_compliance(self) -> list[str]:
         """Placeholder for content compliance scanning."""
-        # Future: scan published assets for prohibited content
         return []
+
+    async def _review_agent_performance(self) -> list[dict]:
+        """Review all agents against performance standards.
+
+        Flags underperformers and recommends replacement when thresholds are breached.
+        """
+        result = await self.db.execute(select(AgentModel))
+        agents = result.scalars().all()
+
+        reviews = []
+        for agent in agents:
+            standard = get_performance_standard(agent.name)
+            min_runs = standard["min_runs_before_review"]
+
+            if agent.total_runs < min_runs:
+                reviews.append({
+                    "agent": agent.name,
+                    "status": "probationary",
+                    "total_runs": agent.total_runs,
+                    "min_runs_needed": min_runs,
+                    "replacement_recommended": False,
+                })
+                continue
+
+            success_rate = agent.total_successes / agent.total_runs if agent.total_runs > 0 else 0.0
+            max_failures = standard["max_consecutive_failures_before_replacement"]
+
+            is_underperforming = success_rate < standard["min_success_rate"]
+            replacement_flagged = agent.consecutive_failures >= max_failures
+
+            review = {
+                "agent": agent.name,
+                "total_runs": agent.total_runs,
+                "success_rate": round(success_rate, 3),
+                "min_success_rate": standard["min_success_rate"],
+                "consecutive_failures": agent.consecutive_failures,
+                "max_consecutive_failures": max_failures,
+                "status": "good",
+                "replacement_recommended": False,
+            }
+
+            if replacement_flagged:
+                review["status"] = "replacement_flagged"
+                review["replacement_recommended"] = True
+                review["reason"] = (
+                    f"{agent.consecutive_failures} consecutive failures "
+                    f"(threshold: {max_failures})"
+                )
+                review["required_skills"] = get_required_skills(agent.name)
+            elif is_underperforming:
+                review["status"] = "underperforming"
+                review["replacement_recommended"] = success_rate < (standard["min_success_rate"] * 0.5)
+                review["reason"] = (
+                    f"Success rate {success_rate:.1%} below minimum {standard['min_success_rate']:.0%}"
+                )
+                review["required_skills"] = get_required_skills(agent.name)
+
+            reviews.append(review)
+
+        return reviews

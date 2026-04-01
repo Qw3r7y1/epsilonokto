@@ -25,3 +25,7 @@ class CircuitBreakerOpen(VentureError):
 
 class GovernanceViolation(VentureError):
     """Raised on policy violation (prohibited topic, blocked domain, etc.)."""
+
+
+class PerformanceDeficient(VentureError):
+    """Flagged when an agent's performance falls below acceptable thresholds."""

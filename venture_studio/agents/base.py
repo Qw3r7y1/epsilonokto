@@ -4,6 +4,7 @@ Base Agent Framework
 Every agent in the venture studio inherits from BaseAgent.
 This provides:
   - governance checks (kill switch, budget, circuit breaker)
+  - performance accountability (tracking, warnings, replacement flags)
   - audit logging
   - structured input/output
   - error handling with automatic circuit breaker
@@ -35,6 +36,10 @@ from venture_studio.db.models import (
     AuditLog,
     BudgetLedger,
     LedgerEntryType,
+)
+from venture_studio.governance.policies import (
+    get_performance_standard,
+    get_required_skills,
 )
 
 
@@ -116,6 +121,12 @@ class BaseAgent(abc.ABC):
                 {"success": result.success, "error": result.error, "spend": result.spend_usd},
             )
 
+            # Performance accountability — non-blocking
+            try:
+                await self._check_performance_standing(agent_record)
+            except Exception:
+                logger.debug(f"Agent {self.name}: performance check skipped (non-critical)")
+
             await self.db.commit()
             return result
 
@@ -165,6 +176,76 @@ class BaseAgent(abc.ABC):
             raise BudgetExceeded(
                 f"Daily spend ${daily_spend:.2f} >= limit ${self.settings.max_daily_spend_usd:.2f}"
             )
+
+    # ── Performance accountability ───────────────────────────────────────
+
+    async def _check_performance_standing(self, record: AgentModel) -> None:
+        """Evaluate agent performance against standards. Audit warnings/flags."""
+        standard = get_performance_standard(self.name)
+        min_runs = standard["min_runs_before_review"]
+
+        if record.total_runs < min_runs:
+            return  # Not enough data to evaluate
+
+        success_rate = record.total_successes / record.total_runs if record.total_runs > 0 else 0.0
+        max_failures = standard["max_consecutive_failures_before_replacement"]
+
+        # Check success rate
+        if success_rate < standard["min_success_rate"]:
+            logger.warning(
+                f"Agent {self.name} performance below threshold: "
+                f"{success_rate:.1%} < {standard['min_success_rate']:.0%} "
+                f"({record.total_runs} runs)"
+            )
+            await self._audit("performance_warning", details={
+                "success_rate": round(success_rate, 3),
+                "threshold": standard["min_success_rate"],
+                "total_runs": record.total_runs,
+                "total_successes": record.total_successes,
+                "total_failures": record.total_failures,
+                "required_skills": get_required_skills(self.name),
+            })
+
+        # Check replacement threshold
+        if record.consecutive_failures >= max_failures:
+            logger.error(
+                f"Agent {self.name} FLAGGED FOR REPLACEMENT: "
+                f"{record.consecutive_failures} consecutive failures "
+                f"(threshold: {max_failures})"
+            )
+            await self._audit("replacement_flagged", details={
+                "consecutive_failures": record.consecutive_failures,
+                "replacement_threshold": max_failures,
+                "success_rate": round(success_rate, 3),
+                "agent_name": self.name,
+            })
+
+    def _get_performance_report(self, record: AgentModel) -> dict:
+        """Return a performance summary for this agent."""
+        standard = get_performance_standard(self.name)
+        success_rate = record.total_successes / record.total_runs if record.total_runs > 0 else 0.0
+        max_failures = standard["max_consecutive_failures_before_replacement"]
+
+        if record.total_runs < standard["min_runs_before_review"]:
+            standing = "probationary"
+        elif record.consecutive_failures >= max_failures:
+            standing = "replacement_flagged"
+        elif success_rate < standard["min_success_rate"]:
+            standing = "underperforming"
+        else:
+            standing = "good"
+
+        return {
+            "agent_name": self.name,
+            "total_runs": record.total_runs,
+            "total_successes": record.total_successes,
+            "total_failures": record.total_failures,
+            "success_rate": round(success_rate, 3),
+            "consecutive_failures": record.consecutive_failures,
+            "standing": standing,
+            "min_success_rate": standard["min_success_rate"],
+            "required_skills": get_required_skills(self.name),
+        }
 
     # ── Helpers ──────────────────────────────────────────────────────────
 
